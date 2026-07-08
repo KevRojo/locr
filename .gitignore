@@ -28,6 +28,14 @@ __pycache__/
 *.swo
 *~
 
+# Temporary test artifacts
+/test_*.png
+/test_*.js
+/make_test_image.py
+/eng.traineddata
+/models/
+
 # OS
 .DS_Store
 Thumbs.db
+

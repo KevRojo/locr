@@ -23,9 +23,11 @@ export async function imageToText(
   image: ImageLike,
   options: ImageToTextOptions = {}
 ): Promise<string> {
-  const worker = await createWorker(options.language ?? 'eng', 1, {
-    logger: options.logger,
-  });
+  const worker = await createWorker(
+    options.language ?? 'eng',
+    1,
+    options.logger ? { logger: options.logger } : undefined,
+  );
   const ret = await worker.recognize(image);
   await worker.terminate();
   return ret.data.text.trim();

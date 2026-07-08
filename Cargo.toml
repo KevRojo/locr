@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/locr-core", "crates/locr-wasm"]
+members = ["crates/locr-core", "crates/locr-wasm", "crates/locr-ffi"]
 resolver = "2"
 
 [workspace.package]

@@ -3,9 +3,11 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
 /// Extract text from image bytes using the local OCR engine.
+///
+/// Uses a process-wide shared engine so models are loaded once.
 #[pyfunction]
 fn image_to_text_bytes(bytes: &[u8]) -> PyResult<String> {
-    let locr = locr_core::default().map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let locr = locr_core::shared().map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
     locr.image_to_text(bytes)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))
 }

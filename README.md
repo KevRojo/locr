@@ -4,7 +4,17 @@
 
 `locr` is an open-source standard for local image-to-text extraction. One core engine compiles to native binaries and WebAssembly, then ships with lightweight wrappers for **npm** and **pip**.
 
-The engine is **100% Rust** ([ocrs](https://github.com/robertknight/ocrs) + [RTen](https://github.com/robertknight/rten)), so it runs on ARM/x64, Linux/macOS/Windows, browsers, and edge without installing native OCR binaries. No Tesseract. No cloud. No phone home.
+The engine is **100% Rust** ([ocrs](https://github.com/robertknight/ocrs) + [RTen](https://github.com/robertknight/rten)), so it runs on ARM/x64, Linux/macOS/Windows, browsers, and edge without installing native OCR binaries. No cloud. No phone home.
+
+## Status (v0.1.0)
+
+| Surface | Engine today | Notes |
+|---------|--------------|-------|
+| **Rust / C ABI / WASM** | pure-Rust ocrs + RTen | models embedded at build time, SHA-256 verified |
+| **Python (`pip install locr`)** | pure-Rust via PyO3 when the wheel is present | optional `locr[fallback]` uses system Tesseract |
+| **JavaScript (`npm install locr`)** | tesseract.js (temporary) | WASM core ships next — migration in progress |
+
+The C ABI and Rust core are the source of truth. npm is honest about the temporary bridge so nobody gets surprised on day one.
 
 ## Quickstart (3 lines)
 
@@ -41,12 +51,13 @@ locr-core = "0.1"
 
 ```rust
 use locr_core;
-let text = locr_core::default()?.image_to_text(&image_bytes)?;
+// `shared()` caches the engine — use this in hot paths / batch OCR.
+let text = locr_core::shared()?.image_to_text(&image_bytes)?;
 ```
 
 ### C / C++ / C# / Go / Java / Swift
 
-Consume the frozen C ABI in `crates/locr-ffi/include/locr.h`. Prebuilt artifacts ship on every release.
+Consume the frozen C ABI in `crates/locr-ffi/include/locr.h`. Release artifacts are built by CI on every tag.
 
 ```c
 #include "locr.h"
@@ -61,11 +72,11 @@ if (locr_image_to_text(bytes, len, &text) == LOCR_OK) {
 
 ```
 locr/
-├── crates/locr-core      # Rust engine (trait + ocrs backend)
+├── crates/locr-core      # Rust engine (trait + ocrs backend, shared() cache)
 ├── crates/locr-ffi       # Stable C ABI (cdylib + staticlib)
 ├── crates/locr-wasm      # wasm32 target
-├── packages/locr-js      # npm wrapper
-├── packages/locr-py      # pip wrapper (PyO3)
+├── packages/locr-js      # npm wrapper (tesseract.js bridge → WASM next)
+├── packages/locr-py      # pip wrapper (PyO3, optional Tesseract fallback)
 └── .github/workflows     # cross-platform CI/CD
 ```
 
@@ -78,14 +89,23 @@ locr/
 | macOS x64 | ✅ | ✅ | ✅ | ✅ |
 | macOS ARM64 | ✅ | ✅ | ✅ | ✅ |
 | Windows x64 | ✅ | ✅ | ✅ | ✅ |
-| Browser / Edge | — | ✅ | ✅ | — |
+| Browser / Edge | — | ✅ | ✅* | — |
 
-## Local-first, always
+\* npm currently uses tesseract.js; pure WASM path is next.
+
+## Local-first guarantees
 
 - Images are processed on-device.
-- No network requests at runtime (models bundled at build time).
+- Rust / C / WASM runtime path makes **no network requests** (models bundled + SHA-256 pinned at build time).
 - No subscription tiers.
 - Open standard: anyone can implement the same `locr.h` ABI.
+- Optional Python Tesseract fallback is opt-in (`pip install 'locr[fallback]'`), never a hard dependency.
+
+## Current limits (honest)
+
+- Recognition models are Latin/English-oriented today; multi-language opts land before ABI 1.0 freeze.
+- First-call latency pays for model load; subsequent calls reuse a process-wide engine (`shared()` / OnceLock).
+- WASM binary with bundled models is large (~10–20MB). CDN + IndexedDB cache is the planned browser path.
 
 ## License
 

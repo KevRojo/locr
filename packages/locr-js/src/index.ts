@@ -1,3 +1,15 @@
+/**
+ * locr JS entry point.
+ *
+ * STATUS (v0.1): this package currently uses tesseract.js as a temporary
+ * local engine so `npm install locr` works today. The pure-Rust core
+ * (`locr-wasm`) is the target path and is already building in CI.
+ * Migration plan: ship wasm-pack artifacts and switch this wrapper over.
+ *
+ * Until then: runs fully on-device, but downloads tesseract worker/traineddata
+ * from a CDN on first use (same as stock tesseract.js).
+ */
+
 import { createWorker, type ImageLike } from 'tesseract.js';
 
 export interface ImageToTextOptions {
@@ -28,9 +40,12 @@ export async function imageToText(
     1,
     options.logger ? { logger: options.logger } : undefined,
   );
-  const ret = await worker.recognize(image);
-  await worker.terminate();
-  return ret.data.text.trim();
+  try {
+    const ret = await worker.recognize(image);
+    return ret.data.text.trim();
+  } finally {
+    await worker.terminate();
+  }
 }
 
 export default imageToText;

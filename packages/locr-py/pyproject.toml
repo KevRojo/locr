@@ -22,7 +22,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Recognition",
 ]
 
-dependencies = ["pytesseract>=0.3.10", "Pillow>=10.0.0"]
+# Zero hard runtime deps when the native wheel ships.
+# Optional Tesseract fallback for environments without the Rust extension.
+dependencies = []
+
+[project.optional-dependencies]
+fallback = ["pytesseract>=0.3.10", "Pillow>=10.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/KevRojo/locr"

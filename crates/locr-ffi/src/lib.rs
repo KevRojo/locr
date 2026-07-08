@@ -31,6 +31,26 @@ pub enum LocrStatus {
     Internal = -5,
 }
 
+fn map_init_error(err: locr_core::LocrError) -> LocrStatus {
+    match err {
+        locr_core::LocrError::ModelsNotFound | locr_core::LocrError::TesseractNotFound => {
+            LocrStatus::EngineNotFound
+        }
+        locr_core::LocrError::DecodeError(_) => LocrStatus::DecodeError,
+        _ => LocrStatus::EngineError,
+    }
+}
+
+fn map_run_error(err: locr_core::LocrError) -> LocrStatus {
+    match err {
+        locr_core::LocrError::DecodeError(_) => LocrStatus::DecodeError,
+        locr_core::LocrError::ModelsNotFound | locr_core::LocrError::TesseractNotFound => {
+            LocrStatus::EngineNotFound
+        }
+        _ => LocrStatus::EngineError,
+    }
+}
+
 /// Returns the locr library version as a static NUL-terminated string.
 /// The returned pointer is static; do NOT free it.
 #[no_mangle]
@@ -62,9 +82,10 @@ pub unsafe extern "C" fn locr_image_to_text(
     }
 
     let data = std::slice::from_raw_parts(bytes, len);
-    let locr = match locr_core::default() {
+    // Shared engine: models load once, not on every FFI call.
+    let locr = match locr_core::shared() {
         Ok(l) => l,
-        Err(_) => return LocrStatus::EngineError,
+        Err(e) => return map_init_error(e),
     };
 
     match locr.image_to_text(data) {
@@ -75,9 +96,7 @@ pub unsafe extern "C" fn locr_image_to_text(
             }
             Err(_) => LocrStatus::Internal,
         },
-        Err(locr_core::LocrError::DecodeError(_)) => LocrStatus::DecodeError,
-        Err(locr_core::LocrError::TesseractNotFound) => LocrStatus::EngineNotFound,
-        Err(_) => LocrStatus::EngineError,
+        Err(e) => map_run_error(e),
     }
 }
 

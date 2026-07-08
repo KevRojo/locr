@@ -53,7 +53,38 @@ pub type DefaultEngine = TesseractCliEngine;
 
 /// Build a `locr` handle with the default engine configured by crate features.
 pub fn default() -> Result<Locr<DefaultEngine>> {
-    Ok(Locr::new(DefaultEngine::new()?))
+    #[cfg(feature = "ocrs")]
+    {
+        Ok(Locr::new(DefaultEngine::new()?))
+    }
+    #[cfg(all(not(feature = "ocrs"), feature = "tesseract-cli"))]
+    {
+        Ok(Locr::new(DefaultEngine::new()))
+    }
+}
+
+/// Shared default engine (models loaded once). Safe for concurrent use.
+///
+/// Prefer this over [`default`] in hot paths (FFI, WASM, batch OCR) so the
+/// expensive model load does not run on every call.
+pub fn shared() -> Result<&'static Locr<DefaultEngine>> {
+    use std::sync::OnceLock;
+    // Cache the engine (or the error string) so we only pay model-load cost once.
+    static ENGINE: OnceLock<std::result::Result<Locr<DefaultEngine>, String>> = OnceLock::new();
+    let slot = ENGINE.get_or_init(|| default().map_err(|e| e.to_string()));
+    match slot {
+        Ok(engine) => Ok(engine),
+        Err(msg) => {
+            // Reconstruct a typed error from the cached string.
+            if msg.contains("models") {
+                Err(LocrError::ModelsNotFound)
+            } else if msg.contains("tesseract") {
+                Err(LocrError::TesseractNotFound)
+            } else {
+                Err(LocrError::EngineError(msg.clone()))
+            }
+        }
+    }
 }
 
 #[cfg(feature = "ocrs")]
@@ -107,11 +138,10 @@ mod ocrs_engine {
                 Err(LocrError::ModelsNotFound)
             }
         }
-    }
 
-    impl Default for OcrsEngine {
-        fn default() -> Self {
-            Self::new().expect("ocrs engine failed to initialize")
+        /// Fallible constructor — prefer this over `Default` (which panics).
+        pub fn try_new() -> Result<Self> {
+            Self::new()
         }
     }
 
@@ -195,7 +225,20 @@ mod tests {
     #[cfg(feature = "ocrs")]
     #[test]
     fn ocrs_engine_initializes() {
-        let _ = OcrsEngine::new();
+        let engine = OcrsEngine::new();
+        assert!(
+            engine.is_ok() || matches!(engine, Err(LocrError::ModelsNotFound)),
+            "unexpected init error: {:?}",
+            engine.err()
+        );
+    }
+
+    #[cfg(feature = "ocrs")]
+    #[test]
+    fn shared_engine_is_reusable() {
+        // Two calls must share the same static instance path without panicking.
+        let _ = shared();
+        let _ = shared();
     }
 
     #[cfg(feature = "tesseract-cli")]

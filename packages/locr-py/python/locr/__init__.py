@@ -1,11 +1,9 @@
 """locr - local OCR for Python. No cloud APIs, no paywalls."""
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import Union
-
-from PIL import Image
-import pytesseract
 
 try:
     from ._locr import image_to_text_bytes  # Rust extension (pure local OCR)
@@ -25,12 +23,43 @@ def _read_path(image: PathLike) -> bytes:
         return f.read()
 
 
+def _open_image(image: Union[PathLike, bytes]):
+    """Open an image for the optional Tesseract fallback.
+
+    Accepts a filesystem path or raw image bytes (wrapped in BytesIO).
+    """
+    from PIL import Image  # type: ignore
+
+    if isinstance(image, (str, Path)):
+        return Image.open(str(image))
+    return Image.open(io.BytesIO(image))
+
+
+def _tesseract_fallback(image: Union[PathLike, bytes]) -> str:
+    """Optional fallback when the Rust extension is not built.
+
+    Requires the optional extras: ``pip install locr[fallback]``
+    and a system Tesseract binary.
+    """
+    try:
+        import pytesseract  # type: ignore
+    except ImportError as e:
+        raise ImportError(
+            "locr Rust extension is not available and the optional Tesseract "
+            "fallback is not installed. Either install a wheel with the native "
+            "extension, or run: pip install 'locr[fallback]'"
+        ) from e
+
+    img = _open_image(image)
+    return pytesseract.image_to_string(img).strip()
+
+
 def image_to_text(image: Union[PathLike, bytes]) -> str:
     """Extract text from an image locally.
 
-    The Rust extension processes the image on-device using a pure-Rust OCR
-    engine. If the extension is unavailable, it falls back to the local
-    Tesseract CLI via pytesseract.
+    Prefers the pure-Rust extension (ocrs/RTen, models embedded at build time).
+    If the extension is unavailable, falls back to the optional Tesseract path
+    via ``pip install 'locr[fallback]'``.
 
     Args:
         image: Path to an image file, or raw image bytes.
@@ -38,13 +67,8 @@ def image_to_text(image: Union[PathLike, bytes]) -> str:
     Returns:
         The recognized text as a string.
     """
-    if isinstance(image, (str, Path)):
-        if image_to_text_bytes is not None:
-            return image_to_text_bytes(_read_path(image))
-        return pytesseract.image_to_string(str(image)).strip()
-
     if image_to_text_bytes is not None:
-        return image_to_text_bytes(image)
+        data = _read_path(image) if isinstance(image, (str, Path)) else image
+        return image_to_text_bytes(data)
 
-    img = Image.open(image)
-    return pytesseract.image_to_string(img).strip()
+    return _tesseract_fallback(image)

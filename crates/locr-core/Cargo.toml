@@ -28,3 +28,4 @@ tesseract-cli = ["dep:tempfile"]
 
 [build-dependencies]
 ureq = "2.10"
+sha2 = "0.10"

@@ -4,6 +4,8 @@
 
 `locr` is an open-source standard for local image-to-text extraction. One core engine compiles to native binaries and WebAssembly, then ships with lightweight wrappers for **npm** and **pip**.
 
+The engine is **100% Rust** ([ocrs](https://github.com/robertknight/ocrs) + [RTen](https://github.com/robertknight/rten)), so it runs on ARM/x64, Linux/macOS/Windows, browsers, and edge without installing native OCR binaries. No Tesseract. No cloud. No phone home.
+
 ## Quickstart (3 lines)
 
 ### Node.js / Bun / Deno
@@ -38,15 +40,29 @@ locr-core = "0.1"
 ```
 
 ```rust
-use locr_core::Locr;
-let text = Locr::new().image_to_text(&image_bytes)?;
+use locr_core;
+let text = locr_core::default()?.image_to_text(&image_bytes)?;
+```
+
+### C / C++ / C# / Go / Java / Swift
+
+Consume the frozen C ABI in `crates/locr-ffi/include/locr.h`. Prebuilt artifacts ship on every release.
+
+```c
+#include "locr.h"
+char *text = NULL;
+if (locr_image_to_text(bytes, len, &text) == LOCR_OK) {
+    printf("%s\n", text);
+    locr_free_text(text);
+}
 ```
 
 ## Architecture
 
 ```
 locr/
-├── crates/locr-core      # Rust engine (trait + backends)
+├── crates/locr-core      # Rust engine (trait + ocrs backend)
+├── crates/locr-ffi       # Stable C ABI (cdylib + staticlib)
 ├── crates/locr-wasm      # wasm32 target
 ├── packages/locr-js      # npm wrapper
 ├── packages/locr-py      # pip wrapper (PyO3)
@@ -67,12 +83,13 @@ locr/
 ## Local-first, always
 
 - Images are processed on-device.
-- No network requests.
+- No network requests at runtime (models bundled at build time).
 - No subscription tiers.
-- Training data and models bundled or downloaded once.
+- Open standard: anyone can implement the same `locr.h` ABI.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+Code: MIT — see [LICENSE](./LICENSE).  
+Bundled OCR models: CC-BY-SA 4.0 — see [crates/locr-core/NOTICE-MODELS](./crates/locr-core/NOTICE-MODELS).
 
 Built with 🔥 by KevRojo & the locr community.

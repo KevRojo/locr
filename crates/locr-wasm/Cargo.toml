@@ -13,3 +13,4 @@ crate-type = ["cdylib"]
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
+locr-core = { path = "../locr-core", default-features = false, features = ["ocrs", "bundle-models"] }

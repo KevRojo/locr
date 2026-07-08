@@ -7,14 +7,16 @@ extern "C" {
 }
 
 /// OCR entry point for WebAssembly.
-/// Currently returns the recognized text via a bundled WASM-compatible engine.
-/// The engine will be swapped for the Rust `locr-core` backend as soon as
-/// a pure-Rust/WASM OCR model is integrated.
+///
+/// Uses the same pure-Rust [ocrs](https://github.com/robertknight/ocrs) engine as the native core,
+/// with models embedded at build time. No network calls, no cloud APIs.
 #[wasm_bindgen]
-pub fn image_to_text(_image_bytes: &[u8]) -> Result<String, JsValue> {
-    // TODO: wire to locr-core once WASM-compatible backend is ready.
-    // For now, the JS wrapper delegates to tesseract.js for actual recognition.
-    Ok(String::from("WASM OCR placeholder"))
+pub fn image_to_text(image_bytes: &[u8]) -> Result<String, JsValue> {
+    let locr = locr_core::default().map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let text = locr
+        .image_to_text(image_bytes)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(text)
 }
 
 #[wasm_bindgen(start)]

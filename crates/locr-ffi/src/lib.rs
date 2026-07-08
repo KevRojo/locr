@@ -9,7 +9,7 @@
 //! - Strings returned by locr must be freed with `locr_free_text`.
 //! - Return codes: 0 = OK, negative = error (see `LocrStatus`).
 
-use locr_core::{Locr, TesseractCliEngine};
+use locr_core;
 use std::ffi::{c_char, CString};
 use std::ptr;
 
@@ -62,7 +62,10 @@ pub unsafe extern "C" fn locr_image_to_text(
     }
 
     let data = std::slice::from_raw_parts(bytes, len);
-    let locr = Locr::new(TesseractCliEngine::new());
+    let locr = match locr_core::default() {
+        Ok(l) => l,
+        Err(_) => return LocrStatus::EngineError,
+    };
 
     match locr.image_to_text(data) {
         Ok(text) => match CString::new(text) {

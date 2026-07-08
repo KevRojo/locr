@@ -17,6 +17,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: crates/locr-core/assets
+          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
+          restore-keys: |
+            locr-ocrs-models-${{ runner.os }}-
       - run: cargo check --workspace
       - run: cargo test --workspace
 
@@ -31,6 +37,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: crates/locr-core/assets
+          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
+          restore-keys: |
+            locr-ocrs-models-${{ runner.os }}-
       - run: cargo build -p locr-ffi --release
       - uses: actions/upload-artifact@v4
         with:
@@ -52,6 +64,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: crates/locr-core/assets
+          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
+          restore-keys: |
+            locr-ocrs-models-${{ runner.os }}-
       - run: cargo build -p locr-wasm --target wasm32-unknown-unknown
 
   python:
@@ -67,6 +85,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: crates/locr-core/assets
+          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
+          restore-keys: |
+            locr-ocrs-models-${{ runner.os }}-
       - uses: PyO3/maturin-action@v1
         with:
           command: build

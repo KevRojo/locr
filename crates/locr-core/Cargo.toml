@@ -5,12 +5,26 @@ edition.workspace = true
 license.workspace = true
 description = "Universal local OCR engine core"
 repository.workspace = true
+build = "build.rs"
 
 [dependencies]
 image = "0.25"
-thiserror = "1.0"
-tempfile = "3.10"
+thiserror = "2.0"
+tempfile = { version = "3.10", optional = true }
+
+# OCR backends. Enable exactly one (or more) depending on the target.
+ocrs = { version = "0.12", optional = true }
+rten = { version = "0.24", default-features = false, features = ["rten_format"], optional = true }
+rten-tensor = { version = "0.24", optional = true }
 
 [features]
-default = ["tesseract-cli"]
-tesseract-cli = []
+default = ["ocrs", "bundle-models"]
+# Pure-Rust OCR engine (recommended; works native + WASM).
+ocrs = ["dep:ocrs", "dep:rten", "dep:rten-tensor"]
+# Bundle the ocrs models inside the binary. Disable to load models at runtime.
+bundle-models = ["ocrs"]
+# Legacy engine using the local `tesseract` CLI. Useful for testing or custom models.
+tesseract-cli = ["dep:tempfile"]
+
+[build-dependencies]
+ureq = { version = "2.10", features = ["https"] }

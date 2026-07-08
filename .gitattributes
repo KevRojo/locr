@@ -1,0 +1,2 @@
+# Treat OCR models as binary so git doesn't try to diff/merge them.
+crates/locr-core/assets/*.rten binary linguist-generated

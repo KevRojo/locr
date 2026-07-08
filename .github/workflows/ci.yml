@@ -69,7 +69,8 @@ jobs:
           python-version: '3.12'
       - uses: PyO3/maturin-action@v1
         with:
-          args: build --release
+          command: build
+          args: --release
           working-directory: packages/locr-py
 
   node:

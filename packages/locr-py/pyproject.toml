@@ -1,0 +1,34 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "locr"
+version = "0.1.0"
+description = "Local OCR for Python. No cloud APIs."
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+dependencies = ["pytesseract>=0.3.10", "Pillow>=10.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/KevRojo/locr"
+Repository = "https://github.com/KevRojo/locr"
+
+[tool.maturin]
+python-source = "python"
+module-name = "locr._locr"
+manifest-path = "Cargo.toml"

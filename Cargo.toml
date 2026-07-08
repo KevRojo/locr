@@ -1,0 +1,10 @@
+[workspace]
+members = ["crates/locr-core", "crates/locr-wasm"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/KevRojo/locr"
+authors = ["KevRojo <kevrojo@example.com>"]

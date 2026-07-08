@@ -1,0 +1,13 @@
+[package]
+name = "locr-py"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "_locr"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+locr-core = { path = "../../crates/locr-core" }

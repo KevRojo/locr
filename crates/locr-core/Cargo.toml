@@ -27,4 +27,4 @@ bundle-models = ["ocrs"]
 tesseract-cli = ["dep:tempfile"]
 
 [build-dependencies]
-ureq = { version = "2.10", features = ["https"] }
+ureq = "2.10"

@@ -4,7 +4,7 @@
 
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::io::Read;
 use std::path::PathBuf;
 
 const MODELS: &[(&str, &str)] = &[
@@ -52,8 +52,9 @@ fn main() {
         let mut file = fs::File::create(&out_path).unwrap_or_else(|e| {
             panic!("failed to create {} in OUT_DIR: {}", name, e);
         });
-        let reader = response.into_reader();
-        let bytes_copied = std::io::copy(&mut reader.take(50_000_000), &mut file)
+        let mut reader = response.into_reader();
+        let mut reader = Read::take(&mut reader, 50_000_000);
+        let bytes_copied = std::io::copy(&mut reader, &mut file)
             .unwrap_or_else(|e| panic!("failed to write {}: {}", name, e));
         if bytes_copied == 0 {
             panic!("model {} download was empty", name);

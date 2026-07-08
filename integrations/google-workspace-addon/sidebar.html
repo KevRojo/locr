@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Roboto, Arial, sans-serif; padding: 12px; color: #333; }
+    h3 { margin-top: 0; }
+    #drop { border: 2px dashed #888; padding: 24px; text-align: center; margin-bottom: 12px; }
+    input[type="file"] { width: 100%; }
+    button { width: 100%; padding: 10px; font-size: 14px; cursor: pointer; }
+    pre { background: #f4f4f4; padding: 10px; min-height: 80px; white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h3>locr — OCR local</h3>
+  <p>Selecciona una imagen. El texto se extrae localmente en tu navegador.</p>
+  <div id="drop">
+    <input type="file" id="imageInput" accept="image/*" />
+  </div>
+  <button id="runOcr">Extraer texto</button>
+  <p>Resultado:</p>
+  <pre id="output">(esperando imagen)</pre>
+
+  <script>
+    (function () {
+      document.getElementById('runOcr').addEventListener('click', runOcr);
+
+      async function runOcr() {
+        const input = document.getElementById('imageInput');
+        if (!input.files || input.files.length === 0) {
+          show('Selecciona una imagen primero.');
+          return;
+        }
+        const file = input.files[0];
+        const bytes = new Uint8Array(await file.arrayBuffer());
+
+        // TODO: replace with real WASM OCR once locr.wasm is ready.
+        const text = await imageToTextPlaceholder(bytes);
+        show(text);
+
+        google.script.run.withSuccessHandler(function () {
+          show(text + '\n\n[Insertado en el documento]');
+        }).withFailureHandler(function (err) {
+          show('Error insertando: ' + err.message);
+        }).insertText(text);
+      }
+
+      async function imageToTextPlaceholder(bytes) {
+        console.log('WASM placeholder received', bytes.length, 'bytes');
+        return '[placeholder OCR] ' + bytes.length + ' bytes procesados. Reemplazar con locr.wasm embebido en base64.';
+      }
+
+      function show(text) {
+        document.getElementById('output').textContent = text;
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{
+  "name": "locr-vscode",
+  "displayName": "locr OCR",
+  "description": "Local image-to-text OCR for VS Code. No cloud APIs.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "publisher": "KevRojo",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:locr.imageToText"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "locr.imageToText",
+        "title": "locr: OCR de imagen"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "locr.imageToText",
+          "group": "2_workspace@5",
+          "when": "resourceExtname =~ /\\.(png|jpg|jpeg|webp|gif|bmp|tiff)$/i"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "locr.imageToText"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

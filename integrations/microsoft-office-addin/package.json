@@ -1,0 +1,16 @@
+{
+  "name": "locr-office-addin",
+  "version": "0.1.0",
+  "description": "locr local OCR Office Add-in (Word, Excel, PowerPoint, Outlook)",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "http-server -S -p 3000 .",
+    "serve": "http-server -p 3000 .",
+    "validate": "office-addin-manifest validate manifest.localhost.xml"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "office-addin-manifest": "^1.12.0"
+  }
+}

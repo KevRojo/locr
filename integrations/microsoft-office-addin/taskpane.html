@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>locr OCR</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 12px; }
+    #drop { border: 2px dashed #888; padding: 24px; text-align: center; margin-bottom: 12px; }
+    button { width: 100%; padding: 10px; font-size: 14px; cursor: pointer; }
+    pre { background: #f4f4f4; padding: 10px; min-height: 80px; white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h3>locr — OCR local</h3>
+  <p>Selecciona o arrastra una imagen. El texto se extrae 100% local.</p>
+  <div id="drop">
+    <input type="file" id="imageInput" accept="image/*" />
+  </div>
+  <button id="runOcr">Extraer texto</button>
+  <p>Resultado:</p>
+  <pre id="output">(esperando imagen)</pre>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
+  <Id>E7B3C4D5-1234-5678-9ABC-DEF012345678</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>KevRojo</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="locr OCR"/>
+  <Description DefaultValue="Local image-to-text OCR. No cloud, no paywall."/>
+  <IconUrl DefaultValue="https://kevrojo.github.io/locr/integrations/microsoft-office-addin/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://kevrojo.github.io/locr/integrations/microsoft-office-addin/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://github.com/KevRojo/locr"/>
+  <AppDomains>
+    <AppDomain>https://github.com</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Document"/>
+    <Host Name="Workbook"/>
+    <Host Name="Presentation"/>
+    <Host Name="Mailbox"/>
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://kevrojo.github.io/locr/integrations/microsoft-office-addin/taskpane.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="locrGroup">
+                <Label resid="locrGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Control xsi:type="Button" id="locrTaskpaneButton">
+                  <Label resid="locrTaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="locrTaskpaneButton.SupertipTitle"/>
+                    <Description resid="locrTaskpaneButton.SupertipText"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>locrTaskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="https://kevrojo.github.io/locr/integrations/microsoft-office-addin/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://kevrojo.github.io/locr/integrations/microsoft-office-addin/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://kevrojo.github.io/locr/integrations/microsoft-office-addin/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://kevrojo.github.io/locr/integrations/microsoft-office-addin/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="locrGroup.Label" DefaultValue="locr"/>
+        <bt:String id="locrTaskpaneButton.Label" DefaultValue="OCR local"/>
+        <bt:String id="locrTaskpaneButton.SupertipTitle" DefaultValue="Extraer texto de imagen"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="locrTaskpaneButton.SupertipText" DefaultValue="Abre locr para extraer texto localmente de cualquier imagen."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

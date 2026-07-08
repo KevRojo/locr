@@ -50,9 +50,16 @@ locr-core = "0.1"
 ```
 
 ```rust
-use locr_core;
+use locr_core::{self, EnhanceOptions};
+
 // `shared()` caches the engine — use this in hot paths / batch OCR.
-let text = locr_core::shared()?.image_to_text(&image_bytes)?;
+let locr = locr_core::shared()?;
+let text = locr.image_to_text(&image_bytes)?;
+
+// Superpower: quality score + auto-enhance when the score is low.
+// If score < 0.55, locr retries with contrast/brightness/saturation/etc.
+let result = locr.image_to_text_auto(&image_bytes, EnhanceOptions::default())?;
+println!("{} (score={:.2}, via {})", result.text, result.score, result.transform.as_str());
 ```
 
 ### C / C++ / C# / Go / Java / Swift

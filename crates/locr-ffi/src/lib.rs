@@ -9,7 +9,7 @@
 //! - Strings returned by locr must be freed with `locr_free_text`.
 //! - Return codes: 0 = OK, negative = error (see `LocrStatus`).
 
-use locr_core;
+use locr_core::{self, EnhanceOptions};
 use std::ffi::{c_char, CString};
 use std::ptr;
 
@@ -82,7 +82,6 @@ pub unsafe extern "C" fn locr_image_to_text(
     }
 
     let data = std::slice::from_raw_parts(bytes, len);
-    // Shared engine: models load once, not on every FFI call.
     let locr = match locr_core::shared() {
         Ok(l) => l,
         Err(e) => return map_init_error(e),
@@ -96,6 +95,88 @@ pub unsafe extern "C" fn locr_image_to_text(
             }
             Err(_) => LocrStatus::Internal,
         },
+        Err(e) => map_run_error(e),
+    }
+}
+
+/// OCR with quality score + optional auto-enhance (superpower).
+///
+/// If `auto_enhance` is non-zero and the first pass scores below `min_score`,
+/// locr retries with contrast/brightness/saturation/grayscale/invert and keeps
+/// the best result.
+///
+/// On success:
+/// - `*out_text` is a NUL-terminated UTF-8 string (free with `locr_free_text`)
+/// - `*out_score` is in `[0.0, 1.0]`
+/// - `*out_transform` is a static-ish diagnostic string (free with `locr_free_text`)
+/// - `*out_attempts` is the number of OCR passes used
+///
+/// Pass null for any out-pointer you don't care about (except `out_text` which
+/// is required).
+///
+/// # Safety
+/// Same contract as `locr_image_to_text`.
+#[no_mangle]
+pub unsafe extern "C" fn locr_image_to_text_ex(
+    bytes: *const u8,
+    len: usize,
+    auto_enhance: i32,
+    min_score: f32,
+    max_attempts: u32,
+    out_text: *mut *mut c_char,
+    out_score: *mut f32,
+    out_transform: *mut *mut c_char,
+    out_attempts: *mut u32,
+) -> LocrStatus {
+    if out_text.is_null() {
+        return LocrStatus::InvalidInput;
+    }
+    *out_text = ptr::null_mut();
+    if !out_transform.is_null() {
+        *out_transform = ptr::null_mut();
+    }
+    if bytes.is_null() || len == 0 {
+        return LocrStatus::InvalidInput;
+    }
+
+    let data = std::slice::from_raw_parts(bytes, len);
+    let locr = match locr_core::shared() {
+        Ok(l) => l,
+        Err(e) => return map_init_error(e),
+    };
+
+    let result = if auto_enhance != 0 {
+        locr.image_to_text_auto(
+            data,
+            EnhanceOptions {
+                min_score: if min_score <= 0.0 { 0.55 } else { min_score },
+                max_attempts: if max_attempts == 0 { 7 } else { max_attempts },
+            },
+        )
+    } else {
+        locr.image_to_text_scored(data)
+    };
+
+    match result {
+        Ok(r) => {
+            match CString::new(r.text) {
+                Ok(cstr) => *out_text = cstr.into_raw(),
+                Err(_) => return LocrStatus::Internal,
+            }
+            if !out_score.is_null() {
+                *out_score = r.score;
+            }
+            if !out_transform.is_null() {
+                match CString::new(r.transform.as_str()) {
+                    Ok(cstr) => *out_transform = cstr.into_raw(),
+                    Err(_) => return LocrStatus::Internal,
+                }
+            }
+            if !out_attempts.is_null() {
+                *out_attempts = r.attempts;
+            }
+            LocrStatus::Ok
+        }
         Err(e) => map_run_error(e),
     }
 }

@@ -22,10 +22,18 @@ That path needs a system [Tesseract](https://tesseract-ocr.github.io/) binary.
 ## Quickstart
 
 ```python
-from locr import image_to_text
+from locr import image_to_text, image_to_text_scored, image_to_text_auto
 
 text = image_to_text("invoice.png")
 print(text)
+
+# Quality score (0..1) — single pass
+r = image_to_text_scored("invoice.png")
+print(r["text"], r["score"])
+
+# Superpower: if score is low, auto-try contrast/brightness/saturation/etc.
+r = image_to_text_auto("dark_scan.png", min_score=0.55)
+print(r["text"], r["score"], r["transform"], r["attempts"])
 
 # Also accepts raw bytes
 with open("invoice.png", "rb") as f:

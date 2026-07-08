@@ -66,9 +66,14 @@ mod ocrs_engine {
     ///
     /// Models are embedded at build time via `include_bytes!` when the `bundle-models` feature
     /// is enabled. No runtime downloads, no cloud calls, no native binaries to install.
-    #[derive(Debug)]
     pub struct OcrsEngine {
         engine: OcrsInner,
+    }
+
+    impl std::fmt::Debug for OcrsEngine {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("OcrsEngine").finish_non_exhaustive()
+        }
     }
 
     impl OcrsEngine {

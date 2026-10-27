@@ -69,7 +69,7 @@ const models = async () => [
 
 test('models: bundled, or loaded at runtime', async () => {
   if (!(await hasBundledModels())) {
-    await assert.rejects(imageToText(helloPath), /no ocrs models/);
+    await assert.rejects(imageToText(helloPath), /loadModels/);
     await loadModels(...(await models()));
   }
 });
@@ -122,7 +122,8 @@ test('options reach the engine', async () => {
   assert.match(digits.text, /^[\d\s]*$/);
   const enhanced = await imageToData(input, { autoEnhance: true, minScore: 2, maxAttempts: 2 });
   assert.equal(enhanced.attempts, 2);
-  assert.ok((await imageToData(input, { beamWidth: 4 })).lines.length > 0);
+  // hello.png has a line for both the real and the synthetic models.
+  assert.ok((await imageToData(helloPath, { beamWidth: 4 })).lines.length > 0);
   await assert.rejects(imageToData(input, { alowedChars: '1' }), (err) => err instanceof TypeError && /alowedChars/.test(err.message));
   await assert.rejects(imageToData(input, { beamWidth: 'wide' }), /beam_width/);
 });

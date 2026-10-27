@@ -6,13 +6,13 @@
 
 use std::sync::{Arc, Mutex};
 
-use locr_core::{image_from_pixels, Locr, OcrOptions, OcrsEngine};
+use locr_core::{image_from_pixels, Locr, LocrError, OcrOptions, OcrsEngine};
 use wasm_bindgen::prelude::*;
 
 /// The active engine: bundled models on first use, or the ones from `loadModels`.
 static ENGINE: Mutex<Option<Arc<Locr<OcrsEngine>>>> = Mutex::new(None);
 
-fn js(err: locr_core::LocrError) -> JsError {
+fn js(err: LocrError) -> JsError {
     JsError::new(&err.to_string())
 }
 
@@ -21,7 +21,13 @@ fn engine() -> Result<Arc<Locr<OcrsEngine>>, JsError> {
     if let Some(engine) = slot.as_ref() {
         return Ok(engine.clone());
     }
-    let engine = Arc::new(Locr::new(OcrsEngine::new().map_err(js)?));
+    let engine = OcrsEngine::new().map_err(|err| match err {
+        LocrError::ModelsNotFound => JsError::new(
+            "this locr build has no bundled models: call loadModels(detection, recognition) first",
+        ),
+        other => js(other),
+    })?;
+    let engine = Arc::new(Locr::new(engine));
     *slot = Some(engine.clone());
     Ok(engine)
 }
@@ -63,9 +69,15 @@ pub fn image_to_text(image_bytes: &[u8]) -> Result<String, JsError> {
 /// `options_json` takes `allowed_chars`, `beam_width`, `auto_enhance`,
 /// `min_score` and `max_attempts`.
 #[wasm_bindgen(js_name = imageToDataJson)]
-pub fn image_to_data_json(image_bytes: &[u8], options_json: Option<String>) -> Result<String, JsError> {
+pub fn image_to_data_json(
+    image_bytes: &[u8],
+    options_json: Option<String>,
+) -> Result<String, JsError> {
     let options = options(options_json)?;
-    Ok(engine()?.image_to_data(image_bytes, &options).map_err(js)?.to_json())
+    Ok(engine()?
+        .image_to_data(image_bytes, &options)
+        .map_err(js)?
+        .to_json())
 }
 
 /// Same as `imageToDataJson` for raw 8-bit pixels (grey, RGB or RGBA, e.g.
@@ -79,7 +91,10 @@ pub fn pixels_to_data_json(
 ) -> Result<String, JsError> {
     let options = options(options_json)?;
     let image = image_from_pixels(width, height, pixels).map_err(js)?;
-    Ok(engine()?.recognize_with(&image, &options).map_err(js)?.to_json())
+    Ok(engine()?
+        .recognize_with(&image, &options)
+        .map_err(js)?
+        .to_json())
 }
 
 #[wasm_bindgen(start)]

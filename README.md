@@ -166,7 +166,7 @@ Builds without the `bundle-models` feature (smaller binaries, distro packaging, 
 - CLI: `--models DIR`
 - JavaScript: `await loadModels(detectionBytes, recognitionBytes)` — e.g. fetched once and cached in IndexedDB
 
-Offline or air-gapped builds can pre-download the models into `crates/locr-core/assets/` or point `LOCR_MODELS_DIR` at them at build time; their SHA-256 is verified either way.
+Offline or air-gapped builds can pre-download the models into `crates/locr-core/assets/` or point `LOCR_BUILD_MODELS_DIR` at them; their SHA-256 is verified either way.
 
 ## Current limits (honest)
 

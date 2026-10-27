@@ -5,7 +5,8 @@
 //! whatever its source. Sources, in order:
 //!
 //! 1. `$OUT_DIR` (already verified by a previous build)
-//! 2. `$LOCR_MODELS_DIR` (offline / air-gapped / distro builds)
+//! 2. `$LOCR_BUILD_MODELS_DIR` (offline / air-gapped / distro builds). Not
+//!    `LOCR_MODELS_DIR`: that one names custom models loaded at runtime.
 //! 3. `assets/` next to `Cargo.toml` (offline / reproducible builds)
 //! 4. the public ocrs model bucket
 
@@ -57,7 +58,7 @@ fn download(name: &str, url: &str) -> Vec<u8> {
         panic!(
             "failed to download {name}: {e}\n\
              Offline? Put text-detection.rten and text-recognition.rten in \
-             crates/locr-core/assets/ or in a directory named by LOCR_MODELS_DIR, \
+             crates/locr-core/assets/ or in a directory named by LOCR_BUILD_MODELS_DIR, \
              or build without the `bundle-models` feature and load models at runtime."
         )
     });
@@ -75,8 +76,7 @@ fn download(name: &str, url: &str) -> Vec<u8> {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=assets");
-    println!("cargo:rerun-if-env-changed=LOCR_MODELS_DIR");
+    println!("cargo:rerun-if-env-changed=LOCR_BUILD_MODELS_DIR");
 
     // Only bundle models when the `bundle-models` feature is enabled.
     if env::var("CARGO_FEATURE_BUNDLE_MODELS").is_err() {
@@ -96,8 +96,12 @@ fn main() {
 
     let crate_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"));
-    let models_dir = env::var_os("LOCR_MODELS_DIR").map(PathBuf::from);
+    let models_dir = env::var_os("LOCR_BUILD_MODELS_DIR").map(PathBuf::from);
     let assets_dir = crate_dir.join("assets");
+    // A missing path would mark the crate dirty on every build.
+    if assets_dir.exists() {
+        println!("cargo:rerun-if-changed=assets");
+    }
 
     for (name, url, expected_sha) in MODELS {
         let out_path = out_dir.join(name);

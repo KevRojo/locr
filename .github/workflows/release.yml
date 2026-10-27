@@ -60,15 +60,23 @@ jobs:
           mkdir -p "$name/include" "$name/lib" "$name/bin"
           cp crates/locr-ffi/include/locr.h "$name/include/"
           cp LICENSE README.md crates/locr-core/NOTICE-MODELS "$name/"
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            cp "$lib/locr.dll" "$lib/locr.dll.lib" "$lib/locr.lib" "$name/lib/"
-            cp "$bin/locr.exe" "$name/bin/"
-            7z a "$name.zip" "$name"
-          else
-            cp "$lib"/liblocr.a "$lib"/liblocr.{so,dylib} "$name/lib/" 2>/dev/null || true
-            cp "$bin/locr" "$name/bin/"
-            tar czf "$name.tar.gz" "$name"
-          fi
+          case "$RUNNER_OS" in
+            Windows)
+              cp "$lib/locr.dll" "$lib/locr.dll.lib" "$lib/locr.lib" "$name/lib/"
+              cp "$bin/locr.exe" "$name/bin/"
+              7z a "$name.zip" "$name"
+              ;;
+            macOS)
+              cp "$lib/liblocr.dylib" "$lib/liblocr.a" "$name/lib/"
+              cp "$bin/locr" "$name/bin/"
+              tar czf "$name.tar.gz" "$name"
+              ;;
+            *)
+              cp "$lib/liblocr.so" "$lib/liblocr.a" "$name/lib/"
+              cp "$bin/locr" "$name/bin/"
+              tar czf "$name.tar.gz" "$name"
+              ;;
+          esac
       - uses: softprops/action-gh-release@v2
         with:
           files: |

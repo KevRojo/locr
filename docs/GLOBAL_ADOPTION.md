@@ -73,7 +73,7 @@ Rule: **every channel ships the exact same core**, built once in CI, signed, rep
 
 ## 4. Engine decision (made)
 
-**`ocrs` + `rten`** — pure Rust, MIT OR Apache-2.0, PyTorch-trained models exported to `.rten`
+**`ocrs` + `rten`** — pure Rust, MIT OR Apache-2.0, PyTorch-trained models published as ONNX
 (~12MB, bundled and SHA-256 pinned). Fits the locked decision: 100% Rust, native ARM/x64,
 compiles to WASM. locr runs the recognition model itself to keep per-character probabilities
 (confidence), and loads custom models/alphabets at runtime. Latin alphabet today; multilingual

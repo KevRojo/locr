@@ -1,6 +1,6 @@
 locr-core bundles the pre-trained OCR models from the ocrs project.
 
-Models: text-detection.rten, text-recognition.rten
+Models: text-detection.onnx, text-recognition.onnx
 Source: https://github.com/robertknight/ocrs-models
 License: CC-BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
 

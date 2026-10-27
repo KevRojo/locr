@@ -188,7 +188,7 @@ export function createLocr(platform: Platform) {
   }
 
   /**
-   * Use these `.rten` models instead of the bundled ones (custom models, or a
+   * Use these `.onnx`/`.rten` models instead of the bundled ones (custom models, or a
    * build without embedded models that fetches and caches them itself).
    */
   async function loadModels(detection: ArrayBuffer | ArrayBufferView, recognition: ArrayBuffer | ArrayBufferView): Promise<void> {

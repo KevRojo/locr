@@ -17,7 +17,7 @@ confianza). npm ya no usa tesseract.js ni descarga nada en runtime.
 | 6 | Leak de `*out_text` en `locr_image_to_text_ex` si fallaba tarde | salidas convertidas antes de escribir |
 | 7 | Python mantenía el GIL durante el OCR | GIL liberado (`py.detach`); entradas PIL/numpy/archivos; wheels abi3; pyo3 0.30 (0.23 tenía RUSTSEC-2025-0020) |
 | 8 | `shared()` mapeaba errores por `msg.contains("models")` | `LocrError: Clone`, sin string matching |
-| 9 | Modelos embebidos sin alinear → rten copiaba cada tensor | `include_bytes!` alineado a 64 bytes (carga zero-copy) |
+| 9 | El reconocedor se cargaba dos veces (ocrs + locr) | locr prepara las imágenes de línea; ocrs solo carga el detector |
 | 10 | ocrs 0.12 filtraba su propia API JS en locr-wasm | ocrs 0.13 sin `export-wasm`; `image` sin encoders AVIF/EXR (rav1e) |
 | 11 | Sin CLI | `locr` (texto o JSON Lines) |
 | 12 | Sin whitelist ni beam search | `allowed_chars` / `beam_width` en todas las superficies |
@@ -28,6 +28,16 @@ confianza). npm ya no usa tesseract.js ni descarga nada en runtime.
 Tests offline con **modelos sintéticos** (`crates/locr-core/tests/fixtures/synthetic`):
 el pipeline completo de ocrs corre sin los modelos reales, y el reconocimiento
 de locr se compara contra el de ocrs (texto y cajas idénticos).
+
+## 🚑 Hotfix CI (2026-10-27)
+
+El bucket de ocrs ya no sirve los `.rten` (ocrs 0.13 publica solo `.onnx`):
+todo build con modelos reales daba **404**, también con el `build.rs` viejo.
+locr ahora embebe `text-detection.onnx` / `text-recognition.onnx` (rten con
+`onnx_format`), y los SHA-256 viven en `crates/locr-core/models.sha256`, que
+leen `build.rs` y la action `ocr-models`. Si un digest falta o no coincide, CI
+falla con una anotación que muestra el digest descargado, para revisarlo y
+pinnearlo.
 
 ## ⚠️ Decisiones pendientes (del dueño)
 

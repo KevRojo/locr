@@ -138,8 +138,9 @@ def main():
         rten_path = os.path.join(HERE, f"{name}.rten")
         onnx.save(model, onnx_path)
         subprocess.run([rten_convert(), onnx_path, rten_path], check=True)
-        os.remove(onnx_path)
-        print(f"wrote {rten_path} ({os.path.getsize(rten_path)} bytes)")
+        # Keep both: the published ocrs models are ONNX, `.rten` loads too.
+        for path in (onnx_path, rten_path):
+            print(f"wrote {path} ({os.path.getsize(path)} bytes)")
 
 
 if __name__ == "__main__":

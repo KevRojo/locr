@@ -159,7 +159,7 @@ locr/
 
 ## Bring your own models
 
-Builds without the `bundle-models` feature (smaller binaries, distro packaging, custom or retrained models) load `text-detection.rten` and `text-recognition.rten` at runtime:
+Builds without the `bundle-models` feature (smaller binaries, distro packaging, custom or retrained models) load `text-detection.onnx` and `text-recognition.onnx` (or `.rten` builds of them) at runtime:
 
 - Rust: `OcrsEngine::from_models_dir(dir)`, `from_model_bytes(..)`, `.with_alphabet(..)` for other character sets
 - C ABI, Python and Rust `shared()`: the `LOCR_MODELS_DIR` environment variable
@@ -172,7 +172,7 @@ Offline or air-gapped builds can pre-download the models into `crates/locr-core/
 
 - Recognition models are Latin/English-oriented today; multi-language models land before ABI 1.0 freeze.
 - First-call latency pays for model load; subsequent calls reuse a process-wide engine (`shared()` / OnceLock).
-- The WASM build with bundled models is ~16 MB (4.4 MB code + 12 MB models). Pages that care can build without models and `loadModels()` from a cache.
+- The WASM build with bundled models is ~17 MB (4.7 MB code + ~12 MB of ONNX models). Pages that care can build without models and `loadModels()` from a cache.
 - In JavaScript, OCR runs on the calling thread inside the async API: use `worker_threads` or a Web Worker for heavy workloads.
 - Edge runtimes that cannot fetch package assets (e.g. Cloudflare Workers, which import `.wasm` as a module) need their own loader entry; it is not packaged yet.
 - Text detection runs at the model's fixed input resolution, so tiny text on very large scans can be missed; crop or tile big pages.

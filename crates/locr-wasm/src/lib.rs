@@ -49,7 +49,7 @@ pub fn has_bundled_models() -> bool {
     cfg!(feature = "bundle-models")
 }
 
-/// Use these `.rten` models (e.g. fetched once and cached in IndexedDB)
+/// Use these `.onnx` or `.rten` models (e.g. fetched once and cached in IndexedDB)
 /// instead of the bundled ones.
 #[wasm_bindgen(js_name = loadModels)]
 pub fn load_models(detection: Vec<u8>, recognition: Vec<u8>) -> Result<(), JsError> {

@@ -77,6 +77,22 @@ def test_greyscale_inputs(page):
 
 
 @native
+def test_high_bit_depth_pil_images(page):
+    np = pytest.importorskip("numpy")
+    from PIL import Image
+
+    grey16 = Image.fromarray((np.asarray(page.convert("L")).astype(np.uint16) * 257))
+    assert grey16.mode.startswith("I;16")
+    from_file = locr.image_to_data(_png(grey16))
+    assert from_file["lines"]
+    assert locr.image_to_data(grey16) == from_file  # used to come out all white
+
+    floats = Image.fromarray(np.asarray(page.convert("L")).astype(np.float32) / 255.0)
+    assert floats.mode == "F"
+    assert locr.image_to_data(floats)["lines"]
+
+
+@native
 def test_pil_exif_orientation_is_applied(page, page_png):
     from PIL import Image
 

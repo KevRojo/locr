@@ -51,13 +51,13 @@ def _load(image: ImageInput) -> _Loaded:
     if hasattr(image, "read"):
         return "bytes", image.read()
     if hasattr(image, "mode") and hasattr(image, "size") and hasattr(image, "tobytes"):
-        return "pixels", _pil_pixels(image)
+        return _pil_input(image)
     if hasattr(image, "shape") and hasattr(image, "dtype") and hasattr(image, "tobytes"):
         return "pixels", _array_pixels(image)
     raise TypeError(f"unsupported image type: {type(image).__name__}")
 
 
-def _pil_pixels(image: Any) -> Tuple[int, int, bytes]:
+def _pil_input(image: Any) -> _Loaded:
     try:
         from PIL import ImageOps  # type: ignore
 
@@ -65,11 +65,22 @@ def _pil_pixels(image: Any) -> Tuple[int, int, bytes]:
         image = ImageOps.exif_transpose(image)
     except ImportError:
         pass
-    if image.mode not in ("L", "RGB", "RGBA"):
+    if image.mode.startswith("I;16"):
+        # 16-bit: encode losslessly so the native decoder scales it exactly
+        # like the same image read from a file (convert() would clip to white).
+        buf = io.BytesIO()
+        image.save(buf, "PNG")
+        return "bytes", buf.getvalue()
+    if image.mode in ("I", "F"):
+        # 32-bit int/float has no file equivalent: stretch its own range to 8 bits.
+        lo, hi = image.getextrema()
+        scale = 255.0 / (hi - lo) if hi > lo else 0.0
+        image = image.point(lambda v: (v - lo) * scale).convert("L")
+    elif image.mode not in ("L", "RGB", "RGBA"):
         has_alpha = image.mode in ("LA", "La", "PA", "RGBa") or "transparency" in image.info
         image = image.convert("RGBA" if has_alpha else "RGB")
     width, height = image.size
-    return width, height, image.tobytes()
+    return "pixels", (width, height, image.tobytes())
 
 
 def _array_pixels(array: Any) -> Tuple[int, int, bytes]:

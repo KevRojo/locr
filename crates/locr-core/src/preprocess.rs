@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::io::Cursor;
 
 use image::metadata::Orientation;
-use image::{DynamicImage, GrayImage, ImageDecoder, ImageReader, RgbImage, RgbaImage};
+use image::{DynamicImage, GrayImage, ImageDecoder, ImageReader, Limits, RgbImage, RgbaImage};
 
 use crate::{LocrError, Result, TransformUsed};
 
@@ -20,6 +20,11 @@ pub fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
     let mut decoder = reader.into_decoder().map_err(decode_err)?;
     // Corrupt metadata must not make an otherwise readable image fail.
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+    // Same allocation cap as `ImageReader::decode` (512 MiB by default): a
+    // tiny header claiming a huge image must fail, not abort the process.
+    let mut limits = Limits::default();
+    limits.reserve(decoder.total_bytes()).map_err(decode_err)?;
+    decoder.set_limits(limits).map_err(decode_err)?;
     let mut img = DynamicImage::from_decoder(decoder).map_err(decode_err)?;
     img.apply_orientation(orientation);
     Ok(img)
@@ -222,6 +227,24 @@ mod tests {
             Err(LocrError::DecodeError(_))
         ));
         assert!(matches!(decode_image(&[]), Err(LocrError::DecodeError(_))));
+    }
+
+    #[test]
+    fn rejects_decompression_bombs() {
+        // 20-byte header claiming a 200000x200000 greyscale image (40 GB):
+        // must be refused up front instead of aborting on allocation.
+        let err = decode_image(b"P5\n200000 200000\n255\n").unwrap_err();
+        assert!(
+            matches!(&err, LocrError::DecodeError(msg) if msg.contains("limit")),
+            "{err}"
+        );
+
+        let mut png = encode(&marker(), ImageFormat::Png);
+        png[16..20].copy_from_slice(&200_000u32.to_be_bytes()); // IHDR width
+        png[20..24].copy_from_slice(&200_000u32.to_be_bytes()); // IHDR height
+        let crc = crc32(&png[12..29]);
+        png[29..33].copy_from_slice(&crc.to_be_bytes());
+        assert!(matches!(decode_image(&png), Err(LocrError::DecodeError(_))));
     }
 
     #[test]

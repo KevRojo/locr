@@ -69,6 +69,7 @@ fn parse_args() -> Result<Option<Args>, lexopt::Error> {
         return Err("no images given (try --help)".into());
     }
     options.enhance = auto.then_some(enhance);
+    options.validate().map_err(|e| e.to_string())?;
     Ok(Some(Args {
         images,
         json,

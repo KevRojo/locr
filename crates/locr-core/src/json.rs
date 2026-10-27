@@ -86,14 +86,16 @@ impl OcrOptions {
         let auto_enhance = field::<bool>(&map, "auto_enhance")?.unwrap_or(false);
         let min_score = field::<f32>(&map, "min_score")?.unwrap_or(defaults.min_score);
         let max_attempts = field::<u32>(&map, "max_attempts")?.unwrap_or(defaults.max_attempts);
-        Ok(OcrOptions {
+        let options = OcrOptions {
             allowed_chars: field(&map, "allowed_chars")?,
             beam_width: field(&map, "beam_width")?.unwrap_or(0),
             enhance: auto_enhance.then_some(EnhanceOptions {
                 min_score,
                 max_attempts,
             }),
-        })
+        };
+        options.validate()?;
+        Ok(options)
     }
 }
 
@@ -181,6 +183,8 @@ mod tests {
     fn option_type_errors_name_the_option() {
         let err = OcrOptions::from_json(r#"{"beam_width":"wide"}"#).unwrap_err();
         assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("`beam_width`")));
+        let err = OcrOptions::from_json(r#"{"beam_width":4294967295}"#).unwrap_err();
+        assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("at most")));
         let err = OcrOptions::from_json(r#"{"beam_width":-1}"#).unwrap_err();
         assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("`beam_width`")));
     }

@@ -370,6 +370,8 @@ impl OcrsEngine {
 
 impl OcrEngine for OcrsEngine {
     fn recognize_lines(&self, image: &DynamicImage, options: &OcrOptions) -> Result<Vec<Line>> {
+        // Also checked by `Locr`, but the engine can be driven directly.
+        options.validate()?;
         let input = self.prepare(image)?;
         let words = self
             .engine
@@ -856,6 +858,17 @@ mod tests {
             }
         );
         assert!(build_line(&[c(' ', 0, 5, 0.5)], 25, 10).is_none());
+    }
+
+    #[test]
+    fn engine_rejects_huge_beams() {
+        let img = DynamicImage::ImageRgb8(page(9, 1, 60, 1));
+        let opts = OcrOptions {
+            beam_width: u32::MAX,
+            ..Default::default()
+        };
+        let err = synthetic_engine().recognize_lines(&img, &opts).unwrap_err();
+        assert!(matches!(err, LocrError::InvalidInput(_)));
     }
 
     #[test]

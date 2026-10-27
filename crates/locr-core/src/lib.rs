@@ -253,11 +253,29 @@ pub struct OcrOptions {
     /// `None` = the full model alphabet.
     pub allowed_chars: Option<String>,
     /// CTC beam search width. `0` or `1` = greedy decoding (fastest).
-    /// Wider beams can fix ambiguous characters at some CPU cost.
+    /// Wider beams can fix ambiguous characters at some CPU cost. At most
+    /// [`MAX_BEAM_WIDTH`].
     pub beam_width: u32,
     /// Retry with contrast/brightness/saturation/... transforms when the
     /// first pass scores low. `None` = single pass.
     pub enhance: Option<EnhanceOptions>,
+}
+
+/// Widest CTC beam [`OcrOptions::beam_width`] accepts. Decoding cost grows
+/// with the width, and wider beams stop helping long before this.
+pub const MAX_BEAM_WIDTH: u32 = 64;
+
+impl OcrOptions {
+    /// Reject options no engine should run with.
+    pub fn validate(&self) -> Result<()> {
+        if self.beam_width > MAX_BEAM_WIDTH {
+            return Err(LocrError::InvalidInput(format!(
+                "beam_width must be at most {MAX_BEAM_WIDTH}, got {}",
+                self.beam_width
+            )));
+        }
+        Ok(())
+    }
 }
 
 /// Heuristic quality score for OCR text in `[0.0, 1.0]`.
@@ -427,6 +445,7 @@ impl<E: OcrEngine> Locr<E> {
 
     /// Same as [`Self::image_to_data`] but on a decoded image.
     pub fn recognize_with(&self, image: &DynamicImage, options: &OcrOptions) -> Result<OcrResult> {
+        options.validate()?;
         let image = preprocess::flatten_alpha(image);
         let mut best = self.run_pass(&image, options, TransformUsed::None, 1)?;
         let Some(enhance) = &options.enhance else {
@@ -675,6 +694,23 @@ mod tests {
         assert_eq!(r.attempts, 4);
         assert_eq!(r.transform, TransformUsed::None);
         assert_eq!(locr.engine().seen.lock().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn huge_beams_are_rejected_before_ocr() {
+        let locr = Locr::new(Scripted::new(vec![]));
+        let opts = OcrOptions {
+            beam_width: MAX_BEAM_WIDTH + 1,
+            ..Default::default()
+        };
+        let err = locr.recognize_with(&white(4, 4), &opts).unwrap_err();
+        assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("beam_width")));
+        assert!(locr.engine().seen.lock().unwrap().is_empty());
+        let opts = OcrOptions {
+            beam_width: MAX_BEAM_WIDTH,
+            ..Default::default()
+        };
+        assert!(locr.recognize_with(&white(4, 4), &opts).is_ok());
     }
 
     #[test]

@@ -126,6 +126,7 @@ test('options reach the engine', async () => {
   assert.ok((await imageToData(helloPath, { beamWidth: 4 })).lines.length > 0);
   await assert.rejects(imageToData(input, { alowedChars: '1' }), (err) => err instanceof TypeError && /alowedChars/.test(err.message));
   await assert.rejects(imageToData(input, { beamWidth: 'wide' }), /beam_width/);
+  await assert.rejects(imageToData(input, { beamWidth: 1000 }), /at most 64/);
 });
 
 test('errors', async () => {

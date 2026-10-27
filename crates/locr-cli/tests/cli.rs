@@ -132,6 +132,10 @@ fn usage_errors() {
     assert_eq!(locr(&[]).status.code(), Some(2));
     assert_eq!(locr(&["--bogus", HELLO_PNG]).status.code(), Some(2));
     assert_eq!(locr(&["--beam", "wide", HELLO_PNG]).status.code(), Some(2));
+    assert_eq!(
+        locr(&["--beam", "100000", HELLO_PNG]).status.code(),
+        Some(2)
+    );
     let out = locr(&["--help"]);
     assert!(out.status.success() && stdout(&out).contains("Usage: locr"));
     let out = locr(&["--version"]);

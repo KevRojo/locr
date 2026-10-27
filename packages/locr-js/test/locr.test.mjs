@@ -95,6 +95,7 @@ test('every input type reads the same', async () => {
   const inputs = {
     path: helloPath.pathname,
     fileUrl: pathToFileURL(helloPath.pathname),
+    fileUrlString: pathToFileURL(helloPath.pathname).href,
     Uint8Array: copy,
     ArrayBuffer: copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength),
     DataView: new DataView(copy.buffer, copy.byteOffset, copy.byteLength),

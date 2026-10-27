@@ -8,7 +8,7 @@ export default defineConfig([
     platform: 'node',
     target: 'node18',
     dts: true,
-    // `import.meta.url` locates the .wasm in the CommonJS build too.
+    // `__dirname` in the ESM build (locates the .wasm).
     shims: true,
     async onSuccess() {
       await copyFile('src/wasm/locr_bg.wasm', 'dist/locr_bg.wasm');

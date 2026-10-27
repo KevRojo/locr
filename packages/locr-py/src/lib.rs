@@ -1,70 +1,66 @@
-use locr_core::{self, EnhanceOptions};
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
+//! Native extension behind the `locr` Python package.
+//!
+//! OCR runs with the GIL released, so other Python threads keep running and
+//! thread pools get real parallelism.
 
-/// Extract text from image bytes using the local OCR engine.
+use locr_core::{self, image_from_pixels, LocrError as CoreError, OcrOptions};
+use pyo3::create_exception;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::prelude::*;
+
+create_exception!(
+    _locr,
+    LocrError,
+    PyRuntimeError,
+    "OCR failed: the image could not be decoded, the models are missing, or the engine errored."
+);
+
+fn to_py(err: CoreError) -> PyErr {
+    match err {
+        CoreError::InvalidInput(msg) => PyValueError::new_err(msg),
+        other => LocrError::new_err(other.to_string()),
+    }
+}
+
+/// Extract text from encoded image bytes using the local OCR engine.
 ///
 /// Uses a process-wide shared engine so models are loaded once.
 #[pyfunction]
-fn image_to_text_bytes(bytes: &[u8]) -> PyResult<String> {
-    let locr = locr_core::shared().map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    locr.image_to_text(bytes)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+fn image_to_text_bytes(py: Python<'_>, bytes: &[u8]) -> PyResult<String> {
+    py.detach(|| locr_core::shared()?.image_to_text(bytes)).map_err(to_py)
 }
 
-/// Extract text + quality score (single pass, no enhance loop).
+/// Full result for encoded image bytes, as the versioned JSON schema.
 ///
-/// Returns a dict: ``{"text": str, "score": float, "transform": str, "attempts": int}``
+/// ``options_json`` takes the keys ``allowed_chars``, ``beam_width``,
+/// ``auto_enhance``, ``min_score`` and ``max_attempts``.
 #[pyfunction]
-fn image_to_text_scored_bytes(bytes: &[u8], py: Python<'_>) -> PyResult<PyObject> {
-    let locr = locr_core::shared().map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    let result = locr
-        .image_to_text_scored(bytes)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    result_to_dict(py, result)
+#[pyo3(signature = (bytes, options_json="{}"))]
+fn image_to_data_json(py: Python<'_>, bytes: &[u8], options_json: &str) -> PyResult<String> {
+    let options = OcrOptions::from_json(options_json).map_err(to_py)?;
+    py.detach(|| Ok(locr_core::shared()?.image_to_data(bytes, &options)?.to_json()))
+        .map_err(to_py)
 }
 
-/// Superpower: OCR with auto-enhance when score is low.
-///
-/// If the first pass scores below ``min_score`` (default 0.55), locr tries
-/// contrast / brightness / saturation / grayscale / invert transforms and
-/// keeps the best scoring result.
-///
-/// Returns a dict: ``{"text": str, "score": float, "transform": str, "attempts": int}``
+/// Full result for raw 8-bit pixels (row-major; 1, 3 or 4 channels inferred
+/// from the buffer length), as the versioned JSON schema.
 #[pyfunction]
-#[pyo3(signature = (bytes, min_score=0.55, max_attempts=7))]
-fn image_to_text_auto_bytes(
-    bytes: &[u8],
-    min_score: f32,
-    max_attempts: u32,
-    py: Python<'_>,
-) -> PyResult<PyObject> {
-    let locr = locr_core::shared().map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    let opts = EnhanceOptions {
-        min_score,
-        max_attempts,
-    };
-    let result = locr
-        .image_to_text_auto(bytes, opts)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    result_to_dict(py, result)
-}
-
-fn result_to_dict(py: Python<'_>, result: locr_core::OcrResult) -> PyResult<PyObject> {
-    let dict = PyDict::new(py);
-    dict.set_item("text", result.text)?;
-    dict.set_item("score", result.score)?;
-    dict.set_item("transform", result.transform.as_str())?;
-    dict.set_item("attempts", result.attempts)?;
-    Ok(dict.into())
+#[pyo3(signature = (width, height, pixels, options_json="{}"))]
+fn pixels_to_data_json(py: Python<'_>, width: u32, height: u32, pixels: &[u8], options_json: &str) -> PyResult<String> {
+    let options = OcrOptions::from_json(options_json).map_err(to_py)?;
+    py.detach(|| {
+        let image = image_from_pixels(width, height, pixels.to_vec())?;
+        Ok(locr_core::shared()?.recognize_with(&image, &options)?.to_json())
+    })
+    .map_err(to_py)
 }
 
 /// locr - local OCR for Python
 #[pymodule]
 fn _locr(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("LocrError", m.py().get_type::<LocrError>())?;
     m.add_function(wrap_pyfunction!(image_to_text_bytes, m)?)?;
-    m.add_function(wrap_pyfunction!(image_to_text_scored_bytes, m)?)?;
-    m.add_function(wrap_pyfunction!(image_to_text_auto_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(image_to_data_json, m)?)?;
+    m.add_function(wrap_pyfunction!(pixels_to_data_json, m)?)?;
     Ok(())
 }

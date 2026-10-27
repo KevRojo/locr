@@ -9,8 +9,14 @@ name = "_locr"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.23", features = ["extension-module"] }
-locr-core = { path = "../../crates/locr-core" }
+# abi3: one wheel per platform for every CPython >= 3.9.
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
+locr-core = { path = "../../crates/locr-core", default-features = false, features = ["ocrs", "json"] }
+
+[features]
+default = ["bundle-models"]
+# Embed the OCR models in the wheel (recommended). Without it, the models are
+# loaded from the directory named by the LOCR_MODELS_DIR environment variable.
+bundle-models = ["locr-core/bundle-models"]
 
 [workspace]
-

@@ -1,12 +1,18 @@
 //! Download or copy the ocrs models so they can be embedded with `include_bytes!`.
 //!
 //! The models are licensed separately (CC-BY-SA 4.0). See `NOTICE-MODELS` in the crate root.
-//! Downloads are integrity-checked with pinned SHA-256 digests before embedding.
+//! Every model is integrity-checked against a pinned SHA-256 digest before embedding,
+//! whatever its source. Sources, in order:
+//!
+//! 1. `$OUT_DIR` (already verified by a previous build)
+//! 2. `$LOCR_MODELS_DIR` (offline / air-gapped / distro builds)
+//! 3. `assets/` next to `Cargo.toml` (offline / reproducible builds)
+//! 4. the public ocrs model bucket
 
 use std::env;
 use std::fs;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// (filename, download URL, expected SHA-256 hex)
 const MODELS: &[(&str, &str, &str)] = &[
@@ -39,15 +45,57 @@ fn verify_or_panic(name: &str, bytes: &[u8], expected: &str) {
     }
 }
 
+fn copy_verified(name: &str, src: &Path, dst: &Path, expected_sha: &str) {
+    let bytes = fs::read(src).unwrap_or_else(|e| panic!("failed to read {}: {}", src.display(), e));
+    verify_or_panic(name, &bytes, expected_sha);
+    fs::write(dst, &bytes).unwrap_or_else(|e| panic!("failed to copy {} to OUT_DIR: {}", name, e));
+}
+
+fn download(name: &str, url: &str) -> Vec<u8> {
+    println!("cargo:warning=downloading model {} from {}", name, url);
+    let response = ureq::get(url).call().unwrap_or_else(|e| {
+        panic!(
+            "failed to download {name}: {e}\n\
+             Offline? Put text-detection.rten and text-recognition.rten in \
+             crates/locr-core/assets/ or in a directory named by LOCR_MODELS_DIR, \
+             or build without the `bundle-models` feature and load models at runtime."
+        )
+    });
+    let mut reader = response.into_reader();
+    let mut reader = Read::take(&mut reader, 50_000_000);
+    let mut bytes = Vec::new();
+    reader
+        .read_to_end(&mut bytes)
+        .unwrap_or_else(|e| panic!("failed to read download for {}: {}", name, e));
+    if bytes.is_empty() {
+        panic!("model {} download was empty", name);
+    }
+    bytes
+}
+
 fn main() {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set"));
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=assets");
+    println!("cargo:rerun-if-env-changed=LOCR_MODELS_DIR");
 
     // Only bundle models when the `bundle-models` feature is enabled.
     if env::var("CARGO_FEATURE_BUNDLE_MODELS").is_err() {
         return;
     }
 
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set"));
+
+    // docs.rs builds have no network access and never run the code: embed
+    // empty placeholders so `include_bytes!` resolves.
+    if env::var_os("DOCS_RS").is_some() {
+        for (name, _, _) in MODELS {
+            fs::write(out_dir.join(name), b"").expect("failed to write placeholder model");
+        }
+        return;
+    }
+
     let crate_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"));
+    let models_dir = env::var_os("LOCR_MODELS_DIR").map(PathBuf::from);
     let assets_dir = crate_dir.join("assets");
 
     for (name, url, expected_sha) in MODELS {
@@ -57,37 +105,25 @@ fn main() {
             let existing = fs::read(&out_path).unwrap_or_else(|e| {
                 panic!("failed to read existing model {}: {}", name, e);
             });
-            verify_or_panic(name, &existing, expected_sha);
-            continue;
+            // A stale placeholder or partial file is re-fetched below.
+            if sha256_hex(&existing) == *expected_sha {
+                continue;
+            }
         }
 
-        // Prefer a pre-downloaded asset next to Cargo.toml (offline/reproducible builds).
-        let asset_path = assets_dir.join(name);
-        if asset_path.exists() {
-            let bytes = fs::read(&asset_path).unwrap_or_else(|e| {
-                panic!("failed to read asset {}: {}", name, e);
-            });
-            verify_or_panic(name, &bytes, expected_sha);
-            fs::write(&out_path, &bytes).unwrap_or_else(|e| {
-                panic!("failed to copy {} to OUT_DIR: {}", name, e);
-            });
+        // Prefer pre-downloaded copies (offline/reproducible builds).
+        let local = models_dir
+            .iter()
+            .chain(std::iter::once(&assets_dir))
+            .map(|dir| dir.join(name))
+            .find(|path| path.exists());
+        if let Some(path) = local {
+            copy_verified(name, &path, &out_path, expected_sha);
             continue;
         }
 
         // Otherwise download from the public model repository, then verify.
-        println!("cargo:warning=downloading model {} from {}", name, url);
-        let response = ureq::get(url)
-            .call()
-            .unwrap_or_else(|e| panic!("failed to download {}: {}", name, e));
-        let mut reader = response.into_reader();
-        let mut reader = Read::take(&mut reader, 50_000_000);
-        let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .unwrap_or_else(|e| panic!("failed to read download for {}: {}", name, e));
-        if bytes.is_empty() {
-            panic!("model {} download was empty", name);
-        }
+        let bytes = download(name, url);
         verify_or_panic(name, &bytes, expected_sha);
         fs::write(&out_path, &bytes).unwrap_or_else(|e| {
             panic!("failed to write {}: {}", name, e);
@@ -98,7 +134,4 @@ fn main() {
             bytes.len()
         );
     }
-
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=assets");
 }

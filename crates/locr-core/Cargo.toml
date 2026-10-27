@@ -6,26 +6,48 @@ license.workspace = true
 description = "Universal local OCR engine core"
 repository.workspace = true
 build = "build.rs"
+# Keep the crate small: the generated test fixtures are tiny, but the real
+# models are downloaded (and SHA-256 verified) by build.rs, never packaged.
+exclude = ["assets/"]
 
 [dependencies]
-image = "0.25"
+# Decoders only. locr never encodes images (except PNG for the Tesseract
+# bridge), so skip `image`'s default AVIF/EXR support: it drags in the rav1e
+# encoder, which dominated compile time and binary size.
+image = { version = "0.25.8", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "pnm", "qoi", "tga", "tiff", "webp"] }
 thiserror = "2.0"
 tempfile = { version = "3.10", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
 
 # OCR backends. Enable exactly one (or more) depending on the target.
-ocrs = { version = "0.12", optional = true }
-rten = { version = "0.24", default-features = false, features = ["rten_format"], optional = true }
-rten-tensor = { version = "0.24", optional = true }
+# `export-wasm` is left off so ocrs does not leak its own JS API into locr-wasm.
+ocrs = { version = "0.13.1", default-features = false, features = ["rten"], optional = true }
+rten = { version = "0.26", default-features = false, features = ["rten_format"], optional = true }
+rten-imageproc = { version = "0.26", optional = true }
+rten-tensor = { version = "0.26", optional = true }
+rayon = { version = "1.10", optional = true }
 
 [features]
 default = ["ocrs", "bundle-models"]
 # Pure-Rust OCR engine (recommended; works native + WASM).
-ocrs = ["dep:ocrs", "dep:rten", "dep:rten-tensor"]
-# Bundle the ocrs models inside the binary. Disable to load models at runtime.
+ocrs = ["dep:ocrs", "dep:rten", "dep:rten-imageproc", "dep:rten-tensor", "dep:rayon"]
+# Bundle the ocrs models inside the binary. Without it, load models at runtime
+# (`OcrsEngine::from_models_dir`, or the `LOCR_MODELS_DIR` environment variable).
 bundle-models = ["ocrs"]
 # Legacy engine using the local `tesseract` CLI. Useful for testing or custom models.
 tesseract-cli = ["dep:tempfile"]
+# `Serialize` for results, `Deserialize` for options.
+serde = ["dep:serde"]
+# Versioned JSON schema shared by the C ABI, CLI, WASM and Python bindings.
+json = ["serde", "dep:serde_json"]
+
+[dev-dependencies]
+serde_json = "1.0"
 
 [build-dependencies]
 ureq = "2.10"
 sha2 = "0.10"
+
+[package.metadata.docs.rs]
+features = ["json"]

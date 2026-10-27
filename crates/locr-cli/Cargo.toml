@@ -1,0 +1,22 @@
+[package]
+name = "locr-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "locr command-line OCR: images in, text or JSON out. Fully local."
+repository.workspace = true
+
+[[bin]]
+name = "locr"
+path = "src/main.rs"
+
+[dependencies]
+locr-core = { path = "../locr-core", version = "0.1.0", default-features = false, features = ["ocrs", "json"] }
+lexopt = "0.3"
+serde_json = "1.0"
+
+[features]
+default = ["bundle-models"]
+# Embed the OCR models in the binary (recommended). Without it, pass --models
+# or set LOCR_MODELS_DIR.
+bundle-models = ["locr-core/bundle-models"]

@@ -1,0 +1,22 @@
+name: OCR models
+description: >
+  Restore or download the ocrs models into crates/locr-core/assets, where
+  build.rs picks them up (and verifies their pinned SHA-256) instead of
+  downloading them again for every build.
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      id: cache
+      with:
+        path: crates/locr-core/assets
+        key: ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p crates/locr-core/assets
+        for model in text-detection text-recognition; do
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "crates/locr-core/assets/$model.rten" \
+            "https://ocrs-models.s3-accelerate.amazonaws.com/$model.rten"
+        done

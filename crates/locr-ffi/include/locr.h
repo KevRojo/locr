@@ -9,6 +9,8 @@
  *   - Thread-safe.
  *   - Strings returned by locr must be freed with locr_free_text().
  *   - Return codes: 0 = OK, negative = error.
+ *   - Panics never cross the boundary: they become LOCR_INTERNAL.
+ *   - locr_last_error() describes the most recent failure on the calling thread.
  *
  * License: MIT. https://github.com/KevRojo/locr
  */
@@ -26,11 +28,11 @@ extern "C" {
 /* Status codes returned by locr functions. */
 typedef enum LocrStatus {
     LOCR_OK = 0,
-    LOCR_INVALID_INPUT = -1,   /* null pointer or zero length      */
-    LOCR_DECODE_ERROR = -2,    /* image bytes could not be decoded */
-    LOCR_ENGINE_ERROR = -3,    /* OCR engine failed                */
-    LOCR_ENGINE_NOT_FOUND = -4,/* no OCR engine on this system     */
-    LOCR_INTERNAL = -5         /* internal error                   */
+    LOCR_INVALID_INPUT = -1,   /* null pointer, zero length, bad options */
+    LOCR_DECODE_ERROR = -2,    /* image bytes could not be decoded      */
+    LOCR_ENGINE_ERROR = -3,    /* OCR engine failed                     */
+    LOCR_ENGINE_NOT_FOUND = -4,/* no OCR engine on this system          */
+    LOCR_INTERNAL = -5         /* internal error                        */
 } LocrStatus;
 
 /*
@@ -38,6 +40,13 @@ typedef enum LocrStatus {
  * Do NOT free the returned pointer.
  */
 const char *locr_version(void);
+
+/*
+ * Description of the most recent error on the calling thread, or NULL if
+ * the last locr call on this thread succeeded. Owned by locr and valid until
+ * the next locr call on the same thread. Do NOT free.
+ */
+const char *locr_last_error(void);
 
 /*
  * Extract text from encoded image bytes (PNG, JPEG, WEBP, BMP, TIFF...).
@@ -74,6 +83,45 @@ LocrStatus locr_image_to_text_ex(const uint8_t *bytes,
                                  float *out_score,
                                  char **out_transform,
                                  uint32_t *out_attempts);
+
+/*
+ * Full result as JSON (schema version 1):
+ *
+ *   {"version":1, "text":"...", "score":0.93, "confidence":0.97,
+ *    "transform":"none", "attempts":1, "width":400, "height":120,
+ *    "lines":[{"text":"...", "confidence":0.97,
+ *              "bbox":{"x":18,"y":26,"width":197,"height":27},
+ *              "words":[{"text":"...", "confidence":0.98, "bbox":{...}}]}]}
+ *
+ * Boxes are in pixels of the image as displayed (EXIF orientation applied).
+ * "confidence" is null when the engine does not report it.
+ *
+ * options_json may be NULL (defaults) or a JSON object; every key is optional:
+ *
+ *   {"allowed_chars":"0123456789", "beam_width":5,
+ *    "auto_enhance":true, "min_score":0.55, "max_attempts":7}
+ *
+ * Unknown keys are rejected with LOCR_INVALID_INPUT.
+ *
+ * On success *out_json is a NUL-terminated UTF-8 string; free it with
+ * locr_free_text(). On failure it is null.
+ */
+LocrStatus locr_image_to_json(const uint8_t *bytes,
+                              size_t len,
+                              const char *options_json,
+                              char **out_json);
+
+/*
+ * Same as locr_image_to_json() for raw 8-bit pixels: tightly packed,
+ * row-major, no row padding. The channel count is inferred from len:
+ * width*height (grey), width*height*3 (RGB) or width*height*4 (RGBA).
+ */
+LocrStatus locr_pixels_to_json(const uint8_t *pixels,
+                               size_t len,
+                               uint32_t width,
+                               uint32_t height,
+                               const char *options_json,
+                               char **out_json);
 
 /* Free a string previously returned by locr. Passing null is a no-op. */
 void locr_free_text(char *text);

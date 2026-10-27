@@ -5,6 +5,8 @@ VS Code extension that runs `locr` OCR locally on images from the workspace.
 ## Development
 
 ```bash
+# The extension depends on the local npm package until `locr` is published.
+(cd ../../packages/locr-js && npm install && npm run build)
 npm install
 npm run compile
 ```
@@ -17,10 +19,10 @@ Then press F5 in VS Code to run the extension in a new Extension Development Hos
 
 ## How it works
 
-The extension loads the `locr` npm package (or a prebuilt native N-API binary) and calls `imageToText(imageBytes)` on the selected image. Everything stays on the user's machine.
+The extension calls `imageToText(imageBytes)` from the `locr` npm package, which runs the Rust OCR engine as WebAssembly inside the extension host. Everything stays on the user's machine.
 
 ## TODO
 
-- [ ] Replace placeholder OCR with real `locr` import once the engine is wired.
-- [ ] Add support for right-clicking an image file in the Explorer.
+- [x] Real OCR through the `locr` npm package.
+- [x] Right-click an image file in the Explorer.
 - [ ] Add support for OCR from the clipboard.

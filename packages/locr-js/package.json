@@ -1,34 +1,52 @@
 {
   "name": "locr",
   "version": "0.1.0",
-  "description": "Local OCR for Node.js, browsers, and edge runtimes. No cloud APIs.",
+  "description": "Local OCR for Node.js, Bun, Deno and browsers. Pure Rust engine compiled to WebAssembly: no cloud APIs, no downloads at runtime.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/KevRojo/locr.git",
     "directory": "packages/locr-js"
   },
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/node.cjs",
+  "module": "./dist/node.js",
+  "types": "./dist/node.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    }
+      "browser": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      },
+      "node": {
+        "import": {
+          "types": "./dist/node.d.ts",
+          "default": "./dist/node.js"
+        },
+        "require": {
+          "types": "./dist/node.d.cts",
+          "default": "./dist/node.cjs"
+        }
+      },
+      "default": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      }
+    },
+    "./locr_bg.wasm": "./dist/locr_bg.wasm"
   },
   "files": [
-    "dist"
+    "dist",
+    "NOTICE-MODELS"
   ],
+  "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
-    "test": "node --test --experimental-strip-types src/index.test.ts 2>nul || node --test dist/index.test.js || echo \"no tests yet — run npm run build first\""
-  },
-  "dependencies": {
-    "tesseract.js": "^6.0.0"
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "build": "npm run build:wasm && tsup",
+    "test": "node --test test/locr.test.mjs"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0"
   },
@@ -39,8 +57,10 @@
     "ocr",
     "local",
     "offline",
-    "tesseract",
     "wasm",
-    "image-to-text"
+    "webassembly",
+    "rust",
+    "image-to-text",
+    "text-recognition"
   ]
 }

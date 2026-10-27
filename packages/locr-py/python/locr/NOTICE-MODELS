@@ -1,0 +1,11 @@
+locr-core bundles the pre-trained OCR models from the ocrs project.
+
+Models: text-detection.rten, text-recognition.rten
+Source: https://github.com/robertknight/ocrs-models
+License: CC-BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
+
+These models are trained exclusively on openly licensed datasets and are
+separate from the locr source code, which is licensed under MIT.
+
+When you redistribute a binary built with `bundle-models`, you MUST include
+this notice and comply with the CC-BY-SA 4.0 terms, including attribution.

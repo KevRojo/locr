@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { imageToText } from 'locr';
 
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand('locr.imageToText', async (uri?: vscode.Uri) => {
@@ -25,8 +26,21 @@ export function activate(context: vscode.ExtensionContext) {
 
     const bytes = fs.readFileSync(filePath);
 
-    // TODO: replace with real locr import once the engine is wired.
-    const text = await imageToTextPlaceholder(bytes);
+    let text: string;
+    try {
+      // Runs the locr WASM engine inside the extension host: nothing is uploaded.
+      text = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `locr: reading ${path.basename(filePath)}` },
+        () => imageToText(bytes),
+      );
+    } catch (err) {
+      vscode.window.showErrorMessage(`locr: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    if (!text) {
+      vscode.window.showInformationMessage(`locr: no text found in ${path.basename(filePath)}`);
+      return;
+    }
 
     const editor = vscode.window.activeTextEditor;
     if (editor) {
@@ -39,11 +53,6 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(disposable);
-}
-
-async function imageToTextPlaceholder(bytes: Buffer): Promise<string> {
-  console.log('OCR placeholder received', bytes.length, 'bytes');
-  return `[placeholder OCR] ${bytes.length} bytes procesados desde ${path.basename('image')}. Reemplazar con import de locr.`;
 }
 
 export function deactivate() {}

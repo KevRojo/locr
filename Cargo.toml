@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/locr-core", "crates/locr-wasm", "crates/locr-ffi"]
+members = ["crates/locr-core", "crates/locr-wasm", "crates/locr-ffi", "crates/locr-cli"]
 resolver = "2"
 
 [workspace.package]
@@ -8,3 +8,10 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/KevRojo/locr"
 authors = ["KevRojo <kevrojo@example.com>"]
+
+# Shipped artifacts (C library, CLI, WASM): ~30% smaller .wasm and faster
+# code, at the cost of longer release builds.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

@@ -6,25 +6,40 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   rust:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
         with:
-          path: crates/locr-core/assets
-          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
-          restore-keys: |
-            locr-ocrs-models-${{ runner.os }}-
-      - run: cargo check --workspace
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/ocr-models
+      - if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+      - if: runner.os == 'Linux'
+        name: Feature combinations
+        run: |
+          cargo check -p locr-core --no-default-features
+          cargo check -p locr-core --no-default-features --features tesseract-cli
+          cargo check -p locr-core --no-default-features --features ocrs,json,serde
+      # Real models: smoke tests read hello.png for real.
       - run: cargo test --workspace
+      # No bundled models: runtime loading (LOCR_MODELS_DIR, --models) with
+      # the synthetic test models.
+      - run: cargo test -p locr-core -p locr-ffi -p locr-cli --no-default-features
 
   ffi:
     name: C ABI (${{ matrix.os }})
@@ -37,13 +52,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
-        with:
-          path: crates/locr-core/assets
-          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
-          restore-keys: |
-            locr-ocrs-models-${{ runner.os }}-
+      - uses: ./.github/actions/ocr-models
       - run: cargo build -p locr-ffi --release
+      - name: Compile and run the C example against locr.h
+        if: runner.os != 'Windows'
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic -I crates/locr-ffi/include \
+            crates/locr-ffi/examples/c/locr_cli.c -L target/release -llocr \
+            -Wl,-rpath,"$PWD/target/release" -o locr_cli
+          ./locr_cli crates/locr-core/tests/fixtures/hello.png
       - uses: actions/upload-artifact@v4
         with:
           name: locr-ffi-${{ matrix.os }}
@@ -55,8 +72,8 @@ jobs:
             target/release/*locr*.lib
             crates/locr-ffi/include/locr.h
 
-  wasm:
-    name: WASM
+  npm:
+    name: npm (WASM)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,13 +81,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
+      - uses: ./.github/actions/ocr-models
+      - id: bindgen
+        name: wasm-bindgen version pinned by locr-wasm
+        run: echo "version=$(sed -n 's/^wasm-bindgen = "=\(.*\)"$/\1/p' crates/locr-wasm/Cargo.toml)" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
         with:
-          path: crates/locr-core/assets
-          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
-          restore-keys: |
-            locr-ocrs-models-${{ runner.os }}-
-      - run: cargo build -p locr-wasm --target wasm32-unknown-unknown
+          tool: wasm-bindgen@${{ steps.bindgen.outputs.version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - working-directory: packages/locr-js
+        run: npm install && npm run build && npm test
+      - working-directory: packages/locr-js
+        run: npm pack --dry-run
 
   python:
     name: Python (${{ matrix.os }})
@@ -82,28 +106,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/locr-py
+      - uses: ./.github/actions/ocr-models
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: actions/cache@v4
-        with:
-          path: crates/locr-core/assets
-          key: locr-ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
-          restore-keys: |
-            locr-ocrs-models-${{ runner.os }}-
-      - uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release
-          working-directory: packages/locr-py
-
-  node:
-    name: Node.js
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - working-directory: packages/locr-js
-        run: npm install && npm run build
+      - name: Build, install and test the wheel
+        shell: bash
+        working-directory: packages/locr-py
+        run: |
+          python -m pip install maturin pytest pillow numpy
+          maturin build --release --out dist
+          python -m pip install dist/*.whl
+          python -m pytest tests

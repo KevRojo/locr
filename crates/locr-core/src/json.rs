@@ -17,7 +17,7 @@
 //!  "auto_enhance":true,"min_score":0.55,"max_attempts":7}
 //! ```
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::{EnhanceOptions, LocrError, OcrOptions, OcrResult, Result};
 
@@ -39,32 +39,44 @@ impl OcrResult {
     }
 }
 
-impl OcrOptions {
-    /// Parse options from JSON. An empty string means defaults.
-    pub fn from_json(json: &str) -> Result<OcrOptions> {
-        #[derive(Deserialize, Default)]
-        #[serde(default, deny_unknown_fields)]
-        struct Flat {
-            allowed_chars: Option<String>,
-            beam_width: u32,
-            auto_enhance: bool,
-            min_score: Option<f32>,
-            max_attempts: Option<u32>,
-        }
+const OPTION_KEYS: [&str; 5] = ["allowed_chars", "beam_width", "auto_enhance", "min_score", "max_attempts"];
 
+impl OcrOptions {
+    /// Parse options from JSON. An empty string means defaults; `null`
+    /// values mean "not set".
+    pub fn from_json(json: &str) -> Result<OcrOptions> {
+        let invalid = |msg: String| LocrError::InvalidInput(format!("invalid options JSON: {msg}"));
         if json.trim().is_empty() {
             return Ok(OcrOptions::default());
         }
-        let flat: Flat = serde_json::from_str(json)
-            .map_err(|e| LocrError::InvalidInput(format!("invalid options JSON: {e}")))?;
+        let value: serde_json::Value = serde_json::from_str(json).map_err(|e| invalid(e.to_string()))?;
+        let serde_json::Value::Object(map) = value else {
+            return Err(invalid("expected an object".into()));
+        };
+        if let Some(key) = map.keys().find(|k| !OPTION_KEYS.contains(&k.as_str())) {
+            return Err(invalid(format!("unknown option `{key}`, expected one of {}", OPTION_KEYS.join(", "))));
+        }
+        // Field by field, so type errors name the offending option.
+        fn field<T: serde::de::DeserializeOwned>(
+            map: &serde_json::Map<String, serde_json::Value>,
+            key: &str,
+        ) -> Result<Option<T>> {
+            match map.get(key) {
+                None | Some(serde_json::Value::Null) => Ok(None),
+                Some(v) => T::deserialize(v)
+                    .map(Some)
+                    .map_err(|e| LocrError::InvalidInput(format!("invalid options JSON: `{key}`: {e}"))),
+            }
+        }
+
         let defaults = EnhanceOptions::default();
+        let auto_enhance = field::<bool>(&map, "auto_enhance")?.unwrap_or(false);
+        let min_score = field::<f32>(&map, "min_score")?.unwrap_or(defaults.min_score);
+        let max_attempts = field::<u32>(&map, "max_attempts")?.unwrap_or(defaults.max_attempts);
         Ok(OcrOptions {
-            allowed_chars: flat.allowed_chars,
-            beam_width: flat.beam_width,
-            enhance: flat.auto_enhance.then(|| EnhanceOptions {
-                min_score: flat.min_score.unwrap_or(defaults.min_score),
-                max_attempts: flat.max_attempts.unwrap_or(defaults.max_attempts),
-            }),
+            allowed_chars: field(&map, "allowed_chars")?,
+            beam_width: field(&map, "beam_width")?.unwrap_or(0),
+            enhance: auto_enhance.then_some(EnhanceOptions { min_score, max_attempts }),
         })
     }
 }
@@ -112,7 +124,22 @@ mod tests {
     #[test]
     fn options_reject_typos() {
         let err = OcrOptions::from_json(r#"{"allowed_char":"0"}"#).unwrap_err();
-        assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("allowed_char")));
+        assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("`allowed_char`")));
         assert!(OcrOptions::from_json("[1, 2]").is_err());
+        assert!(OcrOptions::from_json("{").is_err());
+    }
+
+    #[test]
+    fn option_type_errors_name_the_option() {
+        let err = OcrOptions::from_json(r#"{"beam_width":"wide"}"#).unwrap_err();
+        assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("`beam_width`")));
+        let err = OcrOptions::from_json(r#"{"beam_width":-1}"#).unwrap_err();
+        assert!(matches!(err, LocrError::InvalidInput(msg) if msg.contains("`beam_width`")));
+    }
+
+    #[test]
+    fn null_options_are_unset() {
+        let opts = OcrOptions::from_json(r#"{"allowed_chars":null,"beam_width":null,"auto_enhance":null}"#).unwrap();
+        assert_eq!(opts, OcrOptions::default());
     }
 }

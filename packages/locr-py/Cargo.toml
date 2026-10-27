@@ -20,3 +20,8 @@ default = ["bundle-models"]
 bundle-models = ["locr-core/bundle-models"]
 
 [workspace]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

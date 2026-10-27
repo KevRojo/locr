@@ -1,80 +1,85 @@
+//! WebAssembly build of locr, consumed by the `locr` npm package.
+//!
+//! Uses the same pure-Rust [ocrs](https://github.com/robertknight/ocrs) engine as the native
+//! core. No network calls, no cloud APIs. Results use the versioned JSON schema shared with
+//! the C ABI, CLI and Python bindings; the JS wrapper parses them.
+
+use std::sync::{Arc, Mutex};
+
+use locr_core::{image_from_pixels, Locr, OcrOptions, OcrsEngine};
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
+/// The active engine: bundled models on first use, or the ones from `loadModels`.
+static ENGINE: Mutex<Option<Arc<Locr<OcrsEngine>>>> = Mutex::new(None);
+
+fn js(err: locr_core::LocrError) -> JsError {
+    JsError::new(&err.to_string())
 }
 
-/// OCR entry point for WebAssembly.
-///
-/// Uses the same pure-Rust [ocrs](https://github.com/robertknight/ocrs) engine as the native core,
-/// with models embedded at build time. No network calls, no cloud APIs.
-///
-/// The engine is cached after the first successful call (see `locr_core::shared`).
-#[wasm_bindgen]
-pub fn image_to_text(image_bytes: &[u8]) -> Result<String, JsValue> {
-    let locr = locr_core::shared().map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let text = locr
-        .image_to_text(image_bytes)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    Ok(text)
+fn engine() -> Result<Arc<Locr<OcrsEngine>>, JsError> {
+    let mut slot = ENGINE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(engine) = slot.as_ref() {
+        return Ok(engine.clone());
+    }
+    let engine = Arc::new(Locr::new(OcrsEngine::new().map_err(js)?));
+    *slot = Some(engine.clone());
+    Ok(engine)
 }
 
-/// OCR with quality score (single pass).
-///
-/// Returns a JS object: `{ text, score, transform, attempts }`.
-#[wasm_bindgen]
-pub fn image_to_text_scored(image_bytes: &[u8]) -> Result<JsValue, JsValue> {
-    let locr = locr_core::shared().map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let result = locr
-        .image_to_text_scored(image_bytes)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    result_to_js(result)
+fn options(json: Option<String>) -> Result<OcrOptions, JsError> {
+    OcrOptions::from_json(json.as_deref().unwrap_or("")).map_err(js)
 }
 
-/// Superpower: OCR + auto-enhance when score is low.
-///
-/// If the first pass scores below `min_score` (default 0.55), retries with
-/// contrast / brightness / saturation / grayscale / invert and keeps the best.
-///
-/// Returns a JS object: `{ text, score, transform, attempts }`.
+/// Library version.
 #[wasm_bindgen]
-pub fn image_to_text_auto(
-    image_bytes: &[u8],
-    min_score: Option<f32>,
-    max_attempts: Option<u32>,
-) -> Result<JsValue, JsValue> {
-    let locr = locr_core::shared().map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let opts = locr_core::EnhanceOptions {
-        min_score: min_score.unwrap_or(0.55),
-        max_attempts: max_attempts.unwrap_or(7),
-    };
-    let result = locr
-        .image_to_text_auto(image_bytes, opts)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    result_to_js(result)
+pub fn version() -> String {
+    env!("CARGO_PKG_VERSION").into()
 }
 
-fn result_to_js(result: locr_core::OcrResult) -> Result<JsValue, JsValue> {
-    let obj = js_sys::Object::new();
-    js_sys::Reflect::set(&obj, &"text".into(), &JsValue::from_str(&result.text))
-        .map_err(|e| e)?;
-    js_sys::Reflect::set(&obj, &"score".into(), &JsValue::from_f64(result.score as f64))
-        .map_err(|e| e)?;
-    js_sys::Reflect::set(
-        &obj,
-        &"transform".into(),
-        &JsValue::from_str(&result.transform.as_str()),
-    )
-    .map_err(|e| e)?;
-    js_sys::Reflect::set(
-        &obj,
-        &"attempts".into(),
-        &JsValue::from_f64(result.attempts as f64),
-    )
-    .map_err(|e| e)?;
-    Ok(obj.into())
+/// Whether the OCR models are embedded in this build. If not, call
+/// `loadModels` before reading images.
+#[wasm_bindgen(js_name = hasBundledModels)]
+pub fn has_bundled_models() -> bool {
+    cfg!(feature = "bundle-models")
+}
+
+/// Use these `.rten` models (e.g. fetched once and cached in IndexedDB)
+/// instead of the bundled ones.
+#[wasm_bindgen(js_name = loadModels)]
+pub fn load_models(detection: Vec<u8>, recognition: Vec<u8>) -> Result<(), JsError> {
+    let engine = OcrsEngine::from_model_bytes(detection, recognition).map_err(js)?;
+    *ENGINE.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(Locr::new(engine)));
+    Ok(())
+}
+
+/// Extract text from encoded image bytes (PNG, JPEG, WEBP, BMP, TIFF, GIF...).
+#[wasm_bindgen(js_name = imageToText)]
+pub fn image_to_text(image_bytes: &[u8]) -> Result<String, JsError> {
+    engine()?.image_to_text(image_bytes).map_err(js)
+}
+
+/// Full result (lines, words, boxes, confidence) for encoded image bytes, as JSON.
+///
+/// `options_json` takes `allowed_chars`, `beam_width`, `auto_enhance`,
+/// `min_score` and `max_attempts`.
+#[wasm_bindgen(js_name = imageToDataJson)]
+pub fn image_to_data_json(image_bytes: &[u8], options_json: Option<String>) -> Result<String, JsError> {
+    let options = options(options_json)?;
+    Ok(engine()?.image_to_data(image_bytes, &options).map_err(js)?.to_json())
+}
+
+/// Same as `imageToDataJson` for raw 8-bit pixels (grey, RGB or RGBA, e.g.
+/// canvas `ImageData.data`).
+#[wasm_bindgen(js_name = pixelsToDataJson)]
+pub fn pixels_to_data_json(
+    width: u32,
+    height: u32,
+    pixels: Vec<u8>,
+    options_json: Option<String>,
+) -> Result<String, JsError> {
+    let options = options(options_json)?;
+    let image = image_from_pixels(width, height, pixels).map_err(js)?;
+    Ok(engine()?.recognize_with(&image, &options).map_err(js)?.to_json())
 }
 
 #[wasm_bindgen(start)]

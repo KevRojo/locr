@@ -205,8 +205,16 @@ pub unsafe extern "C" fn locr_image_to_text_ex(
             locr.image_to_text_auto(
                 data,
                 EnhanceOptions {
-                    min_score: if min_score <= 0.0 { defaults.min_score } else { min_score },
-                    max_attempts: if max_attempts == 0 { defaults.max_attempts } else { max_attempts },
+                    min_score: if min_score <= 0.0 {
+                        defaults.min_score
+                    } else {
+                        min_score
+                    },
+                    max_attempts: if max_attempts == 0 {
+                        defaults.max_attempts
+                    } else {
+                        max_attempts
+                    },
                 },
             )?
         } else {
@@ -354,7 +362,9 @@ mod tests {
     fn bad_pixel_buffers_are_rejected() {
         let mut out: *mut c_char = ptr::null_mut();
         let pixels = [0u8; 10];
-        let status = unsafe { locr_pixels_to_json(pixels.as_ptr(), pixels.len(), 2, 2, ptr::null(), &mut out) };
+        let status = unsafe {
+            locr_pixels_to_json(pixels.as_ptr(), pixels.len(), 2, 2, ptr::null(), &mut out)
+        };
         assert_eq!(status, LocrStatus::InvalidInput);
         assert!(out.is_null());
     }
@@ -380,7 +390,9 @@ mod tests {
         let mut out: *mut c_char = ptr::null_mut();
         unsafe { locr_image_to_text(ptr::null(), 0, &mut out) };
         assert!(last_error().is_some());
-        std::thread::spawn(|| assert_eq!(last_error(), None)).join().unwrap();
+        std::thread::spawn(|| assert_eq!(last_error(), None))
+            .join()
+            .unwrap();
     }
 
     #[test]

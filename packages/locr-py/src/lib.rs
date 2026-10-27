@@ -27,7 +27,8 @@ fn to_py(err: CoreError) -> PyErr {
 /// Uses a process-wide shared engine so models are loaded once.
 #[pyfunction]
 fn image_to_text_bytes(py: Python<'_>, bytes: &[u8]) -> PyResult<String> {
-    py.detach(|| locr_core::shared()?.image_to_text(bytes)).map_err(to_py)
+    py.detach(|| locr_core::shared()?.image_to_text(bytes))
+        .map_err(to_py)
 }
 
 /// Full result for encoded image bytes, as the versioned JSON schema.
@@ -38,19 +39,31 @@ fn image_to_text_bytes(py: Python<'_>, bytes: &[u8]) -> PyResult<String> {
 #[pyo3(signature = (bytes, options_json="{}"))]
 fn image_to_data_json(py: Python<'_>, bytes: &[u8], options_json: &str) -> PyResult<String> {
     let options = OcrOptions::from_json(options_json).map_err(to_py)?;
-    py.detach(|| Ok(locr_core::shared()?.image_to_data(bytes, &options)?.to_json()))
-        .map_err(to_py)
+    py.detach(|| {
+        Ok(locr_core::shared()?
+            .image_to_data(bytes, &options)?
+            .to_json())
+    })
+    .map_err(to_py)
 }
 
 /// Full result for raw 8-bit pixels (row-major; 1, 3 or 4 channels inferred
 /// from the buffer length), as the versioned JSON schema.
 #[pyfunction]
 #[pyo3(signature = (width, height, pixels, options_json="{}"))]
-fn pixels_to_data_json(py: Python<'_>, width: u32, height: u32, pixels: &[u8], options_json: &str) -> PyResult<String> {
+fn pixels_to_data_json(
+    py: Python<'_>,
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+    options_json: &str,
+) -> PyResult<String> {
     let options = OcrOptions::from_json(options_json).map_err(to_py)?;
     py.detach(|| {
         let image = image_from_pixels(width, height, pixels.to_vec())?;
-        Ok(locr_core::shared()?.recognize_with(&image, &options)?.to_json())
+        Ok(locr_core::shared()?
+            .recognize_with(&image, &options)?
+            .to_json())
     })
     .map_err(to_py)
 }

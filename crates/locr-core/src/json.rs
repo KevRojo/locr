@@ -34,12 +34,21 @@ impl OcrResult {
             #[serde(flatten)]
             result: &'a OcrResult,
         }
-        serde_json::to_string(&Versioned { version: JSON_SCHEMA_VERSION, result: self })
-            .expect("OcrResult is always serializable")
+        serde_json::to_string(&Versioned {
+            version: JSON_SCHEMA_VERSION,
+            result: self,
+        })
+        .expect("OcrResult is always serializable")
     }
 }
 
-const OPTION_KEYS: [&str; 5] = ["allowed_chars", "beam_width", "auto_enhance", "min_score", "max_attempts"];
+const OPTION_KEYS: [&str; 5] = [
+    "allowed_chars",
+    "beam_width",
+    "auto_enhance",
+    "min_score",
+    "max_attempts",
+];
 
 impl OcrOptions {
     /// Parse options from JSON. An empty string means defaults; `null`
@@ -49,12 +58,16 @@ impl OcrOptions {
         if json.trim().is_empty() {
             return Ok(OcrOptions::default());
         }
-        let value: serde_json::Value = serde_json::from_str(json).map_err(|e| invalid(e.to_string()))?;
+        let value: serde_json::Value =
+            serde_json::from_str(json).map_err(|e| invalid(e.to_string()))?;
         let serde_json::Value::Object(map) = value else {
             return Err(invalid("expected an object".into()));
         };
         if let Some(key) = map.keys().find(|k| !OPTION_KEYS.contains(&k.as_str())) {
-            return Err(invalid(format!("unknown option `{key}`, expected one of {}", OPTION_KEYS.join(", "))));
+            return Err(invalid(format!(
+                "unknown option `{key}`, expected one of {}",
+                OPTION_KEYS.join(", ")
+            )));
         }
         // Field by field, so type errors name the offending option.
         fn field<T: serde::de::DeserializeOwned>(
@@ -63,9 +76,9 @@ impl OcrOptions {
         ) -> Result<Option<T>> {
             match map.get(key) {
                 None | Some(serde_json::Value::Null) => Ok(None),
-                Some(v) => T::deserialize(v)
-                    .map(Some)
-                    .map_err(|e| LocrError::InvalidInput(format!("invalid options JSON: `{key}`: {e}"))),
+                Some(v) => T::deserialize(v).map(Some).map_err(|e| {
+                    LocrError::InvalidInput(format!("invalid options JSON: `{key}`: {e}"))
+                }),
             }
         }
 
@@ -76,7 +89,10 @@ impl OcrOptions {
         Ok(OcrOptions {
             allowed_chars: field(&map, "allowed_chars")?,
             beam_width: field(&map, "beam_width")?.unwrap_or(0),
-            enhance: auto_enhance.then_some(EnhanceOptions { min_score, max_attempts }),
+            enhance: auto_enhance.then_some(EnhanceOptions {
+                min_score,
+                max_attempts,
+            }),
         })
     }
 }
@@ -88,12 +104,21 @@ mod tests {
 
     #[test]
     fn result_schema() {
-        let bbox = BoundingBox { x: 1, y: 2, width: 3, height: 4 };
+        let bbox = BoundingBox {
+            x: 1,
+            y: 2,
+            width: 3,
+            height: 4,
+        };
         let line = Line {
             text: "hi".into(),
             confidence: Some(0.5),
             bbox,
-            words: vec![Word { text: "hi".into(), confidence: None, bbox }],
+            words: vec![Word {
+                text: "hi".into(),
+                confidence: None,
+                bbox,
+            }],
         };
         let result = OcrResult::from_lines(vec![line], 10, 20, TransformUsed::Contrast(30.0), 2);
         let json: serde_json::Value = serde_json::from_str(&result.to_json()).unwrap();
@@ -101,10 +126,19 @@ mod tests {
         assert_eq!(json["text"], "hi");
         assert_eq!(json["transform"], "contrast:30");
         assert_eq!(json["attempts"], 2);
-        assert_eq!((json["width"].clone(), json["height"].clone()), (10.into(), 20.into()));
+        assert_eq!(
+            (json["width"].clone(), json["height"].clone()),
+            (10.into(), 20.into())
+        );
         assert_eq!(json["confidence"], 0.5);
-        assert_eq!(json["lines"][0]["bbox"], serde_json::json!({"x": 1, "y": 2, "width": 3, "height": 4}));
-        assert_eq!(json["lines"][0]["words"][0]["confidence"], serde_json::Value::Null);
+        assert_eq!(
+            json["lines"][0]["bbox"],
+            serde_json::json!({"x": 1, "y": 2, "width": 3, "height": 4})
+        );
+        assert_eq!(
+            json["lines"][0]["words"][0]["confidence"],
+            serde_json::Value::Null
+        );
     }
 
     #[test]
@@ -112,13 +146,27 @@ mod tests {
         assert_eq!(OcrOptions::from_json("").unwrap(), OcrOptions::default());
         assert_eq!(OcrOptions::from_json("{}").unwrap(), OcrOptions::default());
 
-        let opts = OcrOptions::from_json(r#"{"allowed_chars":"0123456789","beam_width":4,"auto_enhance":true,"max_attempts":3}"#).unwrap();
+        let opts = OcrOptions::from_json(
+            r#"{"allowed_chars":"0123456789","beam_width":4,"auto_enhance":true,"max_attempts":3}"#,
+        )
+        .unwrap();
         assert_eq!(opts.allowed_chars.as_deref(), Some("0123456789"));
         assert_eq!(opts.beam_width, 4);
-        assert_eq!(opts.enhance, Some(EnhanceOptions { min_score: 0.55, max_attempts: 3 }));
+        assert_eq!(
+            opts.enhance,
+            Some(EnhanceOptions {
+                min_score: 0.55,
+                max_attempts: 3
+            })
+        );
 
         // Enhance settings without `auto_enhance` stay off.
-        assert_eq!(OcrOptions::from_json(r#"{"min_score":0.9}"#).unwrap().enhance, None);
+        assert_eq!(
+            OcrOptions::from_json(r#"{"min_score":0.9}"#)
+                .unwrap()
+                .enhance,
+            None
+        );
     }
 
     #[test]
@@ -139,7 +187,10 @@ mod tests {
 
     #[test]
     fn null_options_are_unset() {
-        let opts = OcrOptions::from_json(r#"{"allowed_chars":null,"beam_width":null,"auto_enhance":null}"#).unwrap();
+        let opts = OcrOptions::from_json(
+            r#"{"allowed_chars":null,"beam_width":null,"auto_enhance":null}"#,
+        )
+        .unwrap();
         assert_eq!(opts, OcrOptions::default());
     }
 }

@@ -94,7 +94,8 @@ fn main() {
         return;
     }
 
-    let crate_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"));
+    let crate_dir =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"));
     let models_dir = env::var_os("LOCR_MODELS_DIR").map(PathBuf::from);
     let assets_dir = crate_dir.join("assets");
 

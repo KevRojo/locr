@@ -151,7 +151,10 @@ impl fmt::Display for TransformUsed {
 
 #[cfg(feature = "serde")]
 impl serde::Serialize for TransformUsed {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
         serializer.collect_str(self)
     }
 }
@@ -185,7 +188,13 @@ pub struct OcrResult {
 }
 
 impl OcrResult {
-    fn from_lines(lines: Vec<Line>, width: u32, height: u32, transform: TransformUsed, attempts: u32) -> Self {
+    fn from_lines(
+        lines: Vec<Line>,
+        width: u32,
+        height: u32,
+        transform: TransformUsed,
+        attempts: u32,
+    ) -> Self {
         let text = lines
             .iter()
             .map(|l| l.text.as_str())
@@ -273,7 +282,11 @@ pub fn score_ocr_text(text: &str) -> f32 {
     // 2) Alphanumeric / space ratio (letters+digits+space are "good").
     let good = chars
         .iter()
-        .filter(|c| c.is_alphanumeric() || c.is_whitespace() || matches!(c, '.' | ',' | ':' | '-' | '/' | '%' | '$' | '#'))
+        .filter(|c| {
+            c.is_alphanumeric()
+                || c.is_whitespace()
+                || matches!(c, '.' | ',' | ':' | '-' | '/' | '%' | '$' | '#')
+        })
         .count() as f32;
     let alnum_score = good / n;
 
@@ -293,13 +306,32 @@ pub fn score_ocr_text(text: &str) -> f32 {
         .filter(|c| {
             !c.is_alphanumeric()
                 && !c.is_whitespace()
-                && !matches!(c, '.' | ',' | ':' | ';' | '-' | '/' | '%' | '$' | '#' | '(' | ')' | '[' | ']' | '"' | '\'' | '!' | '?')
+                && !matches!(
+                    c,
+                    '.' | ','
+                        | ':'
+                        | ';'
+                        | '-'
+                        | '/'
+                        | '%'
+                        | '$'
+                        | '#'
+                        | '('
+                        | ')'
+                        | '['
+                        | ']'
+                        | '"'
+                        | '\''
+                        | '!'
+                        | '?'
+                )
         })
         .count() as f32;
     let noise_penalty = (weird / n).clamp(0.0, 0.6);
 
     // Weighted blend.
-    let raw = 0.25 * length_score + 0.35 * alnum_score + 0.30 * word_score + 0.10 * (1.0 - noise_penalty);
+    let raw =
+        0.25 * length_score + 0.35 * alnum_score + 0.30 * word_score + 0.10 * (1.0 - noise_penalty);
     (raw - noise_penalty * 0.4).clamp(0.0, 1.0)
 }
 
@@ -354,21 +386,25 @@ impl<E: OcrEngine> Locr<E> {
     ///    grayscale / invert transforms and keep the best scoring result.
     ///
     /// Perfect for washed-out photos, dark UI screenshots, low-contrast scans.
-    pub fn image_to_text_auto(
-        &self,
-        bytes: &[u8],
-        opts: EnhanceOptions,
-    ) -> Result<OcrResult> {
-        self.image_to_data(bytes, &OcrOptions { enhance: Some(opts), ..OcrOptions::default() })
+    pub fn image_to_text_auto(&self, bytes: &[u8], opts: EnhanceOptions) -> Result<OcrResult> {
+        self.image_to_data(
+            bytes,
+            &OcrOptions {
+                enhance: Some(opts),
+                ..OcrOptions::default()
+            },
+        )
     }
 
     /// Same as [`Self::image_to_text_auto`] but on a decoded image.
-    pub fn recognize_auto(
-        &self,
-        image: &DynamicImage,
-        opts: EnhanceOptions,
-    ) -> Result<OcrResult> {
-        self.recognize_with(image, &OcrOptions { enhance: Some(opts), ..OcrOptions::default() })
+    pub fn recognize_auto(&self, image: &DynamicImage, opts: EnhanceOptions) -> Result<OcrResult> {
+        self.recognize_with(
+            image,
+            &OcrOptions {
+                enhance: Some(opts),
+                ..OcrOptions::default()
+            },
+        )
     }
 
     /// Full result — text, lines, words, boxes, confidence — with options.
@@ -437,7 +473,9 @@ impl<E: OcrEngine> Locr<E> {
         } else {
             self.engine.recognize_lines(image, options)?
         };
-        Ok(OcrResult::from_lines(lines, width, height, transform, attempts))
+        Ok(OcrResult::from_lines(
+            lines, width, height, transform, attempts,
+        ))
     }
 }
 
@@ -516,9 +554,27 @@ mod tests {
 
     #[test]
     fn bbox_union() {
-        let a = BoundingBox { x: 10, y: 5, width: 10, height: 10 };
-        let b = BoundingBox { x: 30, y: 0, width: 5, height: 5 };
-        assert_eq!(a.union(&b), BoundingBox { x: 10, y: 0, width: 25, height: 15 });
+        let a = BoundingBox {
+            x: 10,
+            y: 5,
+            width: 10,
+            height: 10,
+        };
+        let b = BoundingBox {
+            x: 30,
+            y: 0,
+            width: 5,
+            height: 5,
+        };
+        assert_eq!(
+            a.union(&b),
+            BoundingBox {
+                x: 10,
+                y: 0,
+                width: 25,
+                height: 15
+            }
+        );
     }
 
     #[test]
@@ -555,7 +611,10 @@ mod tests {
 
     impl Scripted {
         fn new(outputs: Vec<Result<Vec<Line>>>) -> Self {
-            Self { outputs: Mutex::new(outputs), seen: Mutex::new(Vec::new()) }
+            Self {
+                outputs: Mutex::new(outputs),
+                seen: Mutex::new(Vec::new()),
+            }
         }
     }
 
@@ -563,12 +622,20 @@ mod tests {
         fn recognize_lines(&self, image: &DynamicImage, _: &OcrOptions) -> Result<Vec<Line>> {
             self.seen.lock().unwrap().push(image.clone());
             let mut outputs = self.outputs.lock().unwrap();
-            if outputs.is_empty() { Ok(Vec::new()) } else { outputs.remove(0) }
+            if outputs.is_empty() {
+                Ok(Vec::new())
+            } else {
+                outputs.remove(0)
+            }
         }
     }
 
     fn white(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageRgb8(image::RgbImage::from_pixel(w, h, image::Rgb([255, 255, 255])))
+        DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            w,
+            h,
+            image::Rgb([255, 255, 255]),
+        ))
     }
 
     #[test]
@@ -588,7 +655,9 @@ mod tests {
             Ok(vec![line("HELLO LOCR again", Some(0.95))]),
             Ok(vec![line("never reached", Some(0.99))]),
         ]));
-        let r = locr.recognize_auto(&white(4, 4), EnhanceOptions::default()).unwrap();
+        let r = locr
+            .recognize_auto(&white(4, 4), EnhanceOptions::default())
+            .unwrap();
         assert_eq!(r.text, "HELLO LOCR again");
         assert_eq!(r.transform, TransformUsed::Contrast(55.0));
         assert_eq!(r.attempts, 3);
@@ -598,7 +667,10 @@ mod tests {
     #[test]
     fn enhance_respects_max_attempts() {
         let locr = Locr::new(Scripted::new(vec![]));
-        let opts = EnhanceOptions { min_score: 0.99, max_attempts: 4 };
+        let opts = EnhanceOptions {
+            min_score: 0.99,
+            max_attempts: 4,
+        };
         let r = locr.recognize_auto(&white(4, 4), opts).unwrap();
         assert_eq!(r.attempts, 4);
         assert_eq!(r.transform, TransformUsed::None);
@@ -607,7 +679,9 @@ mod tests {
 
     #[test]
     fn empty_image_skips_the_engine() {
-        let locr = Locr::new(Scripted::new(vec![Err(LocrError::EngineError("unreachable".into()))]));
+        let locr = Locr::new(Scripted::new(vec![Err(LocrError::EngineError(
+            "unreachable".into(),
+        ))]));
         let r = locr.recognize_scored(&white(0, 0)).unwrap();
         assert!(r.text.is_empty() && r.lines.is_empty());
         assert!(locr.engine().seen.lock().unwrap().is_empty());

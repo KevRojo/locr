@@ -49,7 +49,9 @@ pub fn image_from_pixels(width: u32, height: u32, pixels: Vec<u8>) -> Result<Dyn
         4 => RgbaImage::from_raw(width, height, pixels).map(DynamicImage::ImageRgba8),
         _ => None,
     };
-    image.ok_or_else(|| LocrError::InvalidInput(format!("pixel buffer does not match {width}x{height}")))
+    image.ok_or_else(|| {
+        LocrError::InvalidInput(format!("pixel buffer does not match {width}x{height}"))
+    })
 }
 
 /// Remove transparency by compositing onto a background that contrasts with
@@ -99,11 +101,21 @@ pub(crate) type Variant = fn(&RgbImage) -> DynamicImage;
 pub(crate) fn enhance_candidates() -> Vec<(TransformUsed, Variant)> {
     use image::imageops::{brighten, contrast, grayscale};
     let candidates: [(TransformUsed, Variant); 8] = [
-        (TransformUsed::Contrast(30.0), |img| DynamicImage::ImageRgb8(contrast(img, 30.0))),
-        (TransformUsed::Contrast(55.0), |img| DynamicImage::ImageRgb8(contrast(img, 55.0))),
-        (TransformUsed::Brightness(25), |img| DynamicImage::ImageRgb8(brighten(img, 25))),
-        (TransformUsed::Brightness(-25), |img| DynamicImage::ImageRgb8(brighten(img, -25))),
-        (TransformUsed::Saturation(1.6), |img| DynamicImage::ImageRgb8(adjust_saturation(img, 1.6))),
+        (TransformUsed::Contrast(30.0), |img| {
+            DynamicImage::ImageRgb8(contrast(img, 30.0))
+        }),
+        (TransformUsed::Contrast(55.0), |img| {
+            DynamicImage::ImageRgb8(contrast(img, 55.0))
+        }),
+        (TransformUsed::Brightness(25), |img| {
+            DynamicImage::ImageRgb8(brighten(img, 25))
+        }),
+        (TransformUsed::Brightness(-25), |img| {
+            DynamicImage::ImageRgb8(brighten(img, -25))
+        }),
+        (TransformUsed::Saturation(1.6), |img| {
+            DynamicImage::ImageRgb8(adjust_saturation(img, 1.6))
+        }),
         (TransformUsed::GrayscaleContrast(40.0), |img| {
             DynamicImage::ImageLuma8(contrast(&grayscale(img), 40.0))
         }),
@@ -180,7 +192,11 @@ mod tests {
         for &b in bytes {
             crc ^= b as u32;
             for _ in 0..8 {
-                crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+                crc = if crc & 1 != 0 {
+                    (crc >> 1) ^ 0xEDB8_8320
+                } else {
+                    crc >> 1
+                };
             }
         }
         !crc
@@ -188,7 +204,12 @@ mod tests {
 
     #[test]
     fn decodes_common_formats() {
-        for format in [ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::Bmp, ImageFormat::Tiff] {
+        for format in [
+            ImageFormat::Png,
+            ImageFormat::Jpeg,
+            ImageFormat::Bmp,
+            ImageFormat::Tiff,
+        ] {
             let img = decode_image(&encode(&marker(), format)).unwrap();
             assert_eq!((img.width(), img.height()), (3, 2), "{format:?}");
         }
@@ -196,7 +217,10 @@ mod tests {
 
     #[test]
     fn rejects_garbage() {
-        assert!(matches!(decode_image(b"not an image"), Err(LocrError::DecodeError(_))));
+        assert!(matches!(
+            decode_image(b"not an image"),
+            Err(LocrError::DecodeError(_))
+        ));
         assert!(matches!(decode_image(&[]), Err(LocrError::DecodeError(_))));
     }
 
@@ -207,7 +231,11 @@ mod tests {
         let rotated = decode_image(&png_with_exif(&png, &exif_orientation(6))).unwrap();
         assert_eq!((rotated.width(), rotated.height()), (2, 3));
         let rgb = rotated.to_rgb8();
-        assert_eq!(rgb.get_pixel(1, 0).0, [255, 0, 0], "top-left marker moves to top-right");
+        assert_eq!(
+            rgb.get_pixel(1, 0).0,
+            [255, 0, 0],
+            "top-left marker moves to top-right"
+        );
 
         let upright = decode_image(&png_with_exif(&png, &exif_orientation(1))).unwrap();
         assert_eq!(upright.to_rgb8().get_pixel(0, 0).0, [255, 0, 0]);
@@ -215,12 +243,30 @@ mod tests {
 
     #[test]
     fn pixels_infer_channels() {
-        assert!(image_from_pixels(2, 2, vec![0; 4]).unwrap().as_luma8().is_some());
-        assert!(image_from_pixels(2, 2, vec![0; 12]).unwrap().as_rgb8().is_some());
-        assert!(image_from_pixels(2, 2, vec![0; 16]).unwrap().as_rgba8().is_some());
-        assert!(matches!(image_from_pixels(2, 2, vec![0; 8]), Err(LocrError::InvalidInput(_))));
-        assert!(matches!(image_from_pixels(2, 2, vec![0; 5]), Err(LocrError::InvalidInput(_))));
-        assert!(matches!(image_from_pixels(0, 2, vec![]), Err(LocrError::InvalidInput(_))));
+        assert!(image_from_pixels(2, 2, vec![0; 4])
+            .unwrap()
+            .as_luma8()
+            .is_some());
+        assert!(image_from_pixels(2, 2, vec![0; 12])
+            .unwrap()
+            .as_rgb8()
+            .is_some());
+        assert!(image_from_pixels(2, 2, vec![0; 16])
+            .unwrap()
+            .as_rgba8()
+            .is_some());
+        assert!(matches!(
+            image_from_pixels(2, 2, vec![0; 8]),
+            Err(LocrError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            image_from_pixels(2, 2, vec![0; 5]),
+            Err(LocrError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            image_from_pixels(0, 2, vec![]),
+            Err(LocrError::InvalidInput(_))
+        ));
     }
 
     #[test]

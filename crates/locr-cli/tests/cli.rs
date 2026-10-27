@@ -3,8 +3,14 @@
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 
-const HELLO_PNG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../locr-core/tests/fixtures/hello.png");
-const MODELS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../locr-core/tests/fixtures/synthetic");
+const HELLO_PNG: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../locr-core/tests/fixtures/hello.png"
+);
+const MODELS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../locr-core/tests/fixtures/synthetic"
+);
 
 fn locr(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_locr"))
@@ -32,14 +38,22 @@ fn prints_text() {
 
 #[test]
 fn json_lines_with_source() {
-    let out = locr(&["--models", MODELS, "--json", "--beam", "3", HELLO_PNG, HELLO_PNG]);
+    let out = locr(&[
+        "--models", MODELS, "--json", "--beam", "3", HELLO_PNG, HELLO_PNG,
+    ]);
     assert!(out.status.success(), "{}", stderr(&out));
-    let lines: Vec<serde_json::Value> = stdout(&out).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    let lines: Vec<serde_json::Value> = stdout(&out)
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
     assert_eq!(lines.len(), 2);
     for json in lines {
         assert_eq!(json["version"], 1);
         assert_eq!(json["source"], HELLO_PNG);
-        assert_eq!((json["width"].as_u64(), json["height"].as_u64()), (Some(400), Some(120)));
+        assert_eq!(
+            (json["width"].as_u64(), json["height"].as_u64()),
+            (Some(400), Some(120))
+        );
         assert!(json["lines"].is_array());
     }
 }
@@ -48,7 +62,12 @@ fn json_lines_with_source() {
 fn several_images_get_headers() {
     let out = locr(&["--models", MODELS, HELLO_PNG, HELLO_PNG]);
     assert!(out.status.success());
-    assert_eq!(stdout(&out).matches(&format!("==> {HELLO_PNG} <==")).count(), 2);
+    assert_eq!(
+        stdout(&out)
+            .matches(&format!("==> {HELLO_PNG} <=="))
+            .count(),
+        2
+    );
 }
 
 #[test]
@@ -59,7 +78,12 @@ fn reads_stdin() {
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(&std::fs::read(HELLO_PNG).unwrap()).unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&std::fs::read(HELLO_PNG).unwrap())
+        .unwrap();
     let out = child.wait_with_output().unwrap();
     assert!(out.status.success());
     let json: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
@@ -69,14 +93,27 @@ fn reads_stdin() {
 #[test]
 fn options_reach_the_engine() {
     let out = locr(&[
-        "--models", MODELS, "--json", "--auto", "--min-score", "2", "--max-attempts", "2",
-        "--allowed-chars", "0123456789", HELLO_PNG,
+        "--models",
+        MODELS,
+        "--json",
+        "--auto",
+        "--min-score",
+        "2",
+        "--max-attempts",
+        "2",
+        "--allowed-chars",
+        "0123456789",
+        HELLO_PNG,
     ]);
     assert!(out.status.success(), "{}", stderr(&out));
     let json: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
     assert_eq!(json["attempts"], 2);
     let text = json["text"].as_str().unwrap();
-    assert!(text.chars().all(|c| c.is_ascii_digit() || c.is_whitespace()), "{text:?}");
+    assert!(
+        text.chars()
+            .all(|c| c.is_ascii_digit() || c.is_whitespace()),
+        "{text:?}"
+    );
 }
 
 #[test]
@@ -98,7 +135,10 @@ fn usage_errors() {
     let out = locr(&["--help"]);
     assert!(out.status.success() && stdout(&out).contains("Usage: locr"));
     let out = locr(&["--version"]);
-    assert_eq!(stdout(&out).trim(), format!("locr {}", env!("CARGO_PKG_VERSION")));
+    assert_eq!(
+        stdout(&out).trim(),
+        format!("locr {}", env!("CARGO_PKG_VERSION"))
+    );
 }
 
 #[test]

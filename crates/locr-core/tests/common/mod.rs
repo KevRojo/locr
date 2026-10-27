@@ -8,7 +8,11 @@ use image::{DynamicImage, ImageFormat, Rgb, RgbImage, Rgba, RgbaImage};
 pub const SYNTHETIC_MODELS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/synthetic");
 
 pub fn hello_png() -> Vec<u8> {
-    std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello.png")).expect("hello.png fixture missing")
+    std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/hello.png"
+    ))
+    .expect("hello.png fixture missing")
 }
 
 pub fn png(img: &DynamicImage) -> Vec<u8> {
@@ -45,7 +49,11 @@ fn crc32(bytes: &[u8]) -> u32 {
     for &b in bytes {
         crc ^= b as u32;
         for _ in 0..8 {
-            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
         }
     }
     !crc

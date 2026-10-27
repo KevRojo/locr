@@ -70,7 +70,9 @@ fn auto_enhance_picks_best() {
 #[test]
 fn structured_output_has_boxes() {
     let locr = locr_core::shared().expect("engine init");
-    let result = locr.image_to_data(&hello_png(), &OcrOptions::default()).expect("ocr");
+    let result = locr
+        .image_to_data(&hello_png(), &OcrOptions::default())
+        .expect("ocr");
     eprintln!("{:#?}", result.lines);
     assert_eq!((result.width, result.height), (400, 120));
     assert!(!result.lines.is_empty());
@@ -81,8 +83,18 @@ fn structured_output_has_boxes() {
             assert!(word.confidence.is_some_and(|c| c > 0.0 && c <= 1.0));
         }
     }
-    let words: Vec<String> = result.lines.iter().flat_map(|l| &l.words).map(|w| w.text.to_uppercase()).collect();
-    assert!(words.iter().any(|w| w.contains("HELLO") || w.contains("LOCR")), "{words:?}");
+    let words: Vec<String> = result
+        .lines
+        .iter()
+        .flat_map(|l| &l.words)
+        .map(|w| w.text.to_uppercase())
+        .collect();
+    assert!(
+        words
+            .iter()
+            .any(|w| w.contains("HELLO") || w.contains("LOCR")),
+        "{words:?}"
+    );
 }
 
 #[test]
@@ -91,7 +103,9 @@ fn transparent_png_reads_like_the_original() {
     let locr = locr_core::shared().expect("engine init");
     let original = decode_image(&hello_png()).unwrap();
     let expected = locr.image_to_text(&hello_png()).unwrap();
-    let transparent = locr.image_to_text(&png(&transparent_ink(&original))).unwrap();
+    let transparent = locr
+        .image_to_text(&png(&transparent_ink(&original)))
+        .unwrap();
     assert!(!expected.is_empty());
     assert_eq!(transparent, expected);
 }
@@ -108,16 +122,33 @@ fn exif_rotated_photo_reads_like_the_original() {
 #[test]
 fn allowed_chars_whitelist() {
     let locr = locr_core::shared().expect("engine init");
-    let opts = OcrOptions { allowed_chars: Some("HELOCR".into()), ..Default::default() };
+    let opts = OcrOptions {
+        allowed_chars: Some("HELOCR".into()),
+        ..Default::default()
+    };
     let result = locr.image_to_data(&hello_png(), &opts).unwrap();
     eprintln!("whitelisted: {:?}", result.text);
-    assert!(result.text.chars().all(|c| "HELOCR".contains(c) || c.is_whitespace()), "{:?}", result.text);
+    assert!(
+        result
+            .text
+            .chars()
+            .all(|c| "HELOCR".contains(c) || c.is_whitespace()),
+        "{:?}",
+        result.text
+    );
 }
 
 #[test]
 fn beam_search_reads_hello() {
     let locr = locr_core::shared().expect("engine init");
-    let opts = OcrOptions { beam_width: 5, ..Default::default() };
-    let text = locr.image_to_data(&hello_png(), &opts).unwrap().text.to_uppercase();
+    let opts = OcrOptions {
+        beam_width: 5,
+        ..Default::default()
+    };
+    let text = locr
+        .image_to_data(&hello_png(), &opts)
+        .unwrap()
+        .text
+        .to_uppercase();
     assert!(text.contains("HELLO") || text.contains("LOCR"), "{text:?}");
 }

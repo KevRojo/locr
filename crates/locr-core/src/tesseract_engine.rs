@@ -23,7 +23,9 @@ impl OcrEngine for TesseractCliEngine {
         let mut command = std::process::Command::new("tesseract");
         command.arg(temp.path()).arg("stdout").arg("-l").arg("eng");
         if let Some(allowed) = &options.allowed_chars {
-            command.arg("-c").arg(format!("tessedit_char_whitelist={allowed}"));
+            command
+                .arg("-c")
+                .arg(format!("tessedit_char_whitelist={allowed}"));
         }
         // Word-level boxes and confidence instead of plain text.
         command.arg("tsv");
@@ -42,7 +44,8 @@ impl OcrEngine for TesseractCliEngine {
             ));
         }
 
-        let tsv = String::from_utf8(output.stdout).map_err(|e| LocrError::EngineError(e.to_string()))?;
+        let tsv =
+            String::from_utf8(output.stdout).map_err(|e| LocrError::EngineError(e.to_string()))?;
         Ok(parse_tsv(&tsv))
     }
 }
@@ -65,7 +68,12 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
             }
             _ => lines.push((
                 key,
-                Line { text: word.text.clone(), confidence: None, bbox: word.bbox, words: vec![word] },
+                Line {
+                    text: word.text.clone(),
+                    confidence: None,
+                    bbox: word.bbox,
+                    words: vec![word],
+                },
             )),
         }
     }
@@ -88,7 +96,8 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
 /// A level-5 (word) row: its line key (page, block, paragraph, line) and the word.
 fn parse_word_row(row: &str) -> Option<([u32; 4], Word)> {
     let cols: Vec<&str> = row.splitn(12, '\t').collect();
-    let [level, page, block, par, line, _word, left, top, width, height, conf, text] = cols[..] else {
+    let [level, page, block, par, line, _word, left, top, width, height, conf, text] = cols[..]
+    else {
         return None;
     };
     let text = text.trim();
@@ -97,14 +106,26 @@ fn parse_word_row(row: &str) -> Option<([u32; 4], Word)> {
     }
     let num = |s: &str| s.trim().parse::<u32>().ok();
     let key = [num(page)?, num(block)?, num(par)?, num(line)?];
-    let bbox = BoundingBox { x: num(left)?, y: num(top)?, width: num(width)?, height: num(height)? };
+    let bbox = BoundingBox {
+        x: num(left)?,
+        y: num(top)?,
+        width: num(width)?,
+        height: num(height)?,
+    };
     let confidence = conf
         .trim()
         .parse::<f32>()
         .ok()
         .filter(|c| *c >= 0.0)
         .map(|c| (c / 100.0).min(1.0));
-    Some((key, Word { text: text.to_string(), confidence, bbox }))
+    Some((
+        key,
+        Word {
+            text: text.to_string(),
+            confidence,
+            bbox,
+        },
+    ))
 }
 
 #[cfg(test)]
@@ -123,7 +144,15 @@ mod tests {
         let lines = parse_tsv(tsv);
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].text, "HELLO LOCR");
-        assert_eq!(lines[0].bbox, BoundingBox { x: 20, y: 30, width: 200, height: 40 });
+        assert_eq!(
+            lines[0].bbox,
+            BoundingBox {
+                x: 20,
+                y: 30,
+                width: 200,
+                height: 40
+            }
+        );
         assert_eq!(lines[0].words[1].confidence, Some(0.9));
         let expected = (0.965 * 5.0 + 0.9 * 4.0) / 9.0;
         assert!((lines[0].confidence.unwrap() - expected).abs() < 1e-6);

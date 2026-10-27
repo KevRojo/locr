@@ -18,7 +18,10 @@ fn init() {
         if cfg!(not(feature = "bundle-models")) {
             std::env::set_var(
                 "LOCR_MODELS_DIR",
-                concat!(env!("CARGO_MANIFEST_DIR"), "/../locr-core/tests/fixtures/synthetic"),
+                concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../locr-core/tests/fixtures/synthetic"
+                ),
             );
         }
     });
@@ -46,7 +49,10 @@ fn image_to_text() {
     assert_eq!(status, LocrStatus::Ok);
     let text = take(out);
     if cfg!(feature = "bundle-models") {
-        assert!(text.to_uppercase().contains("HELLO") || text.to_uppercase().contains("LOCR"), "{text:?}");
+        assert!(
+            text.to_uppercase().contains("HELLO") || text.to_uppercase().contains("LOCR"),
+            "{text:?}"
+        );
     }
     assert!(locr_last_error().is_null());
 }
@@ -55,11 +61,15 @@ fn image_to_text() {
 fn image_to_json() {
     init();
     let mut out = ptr::null_mut();
-    let status = unsafe { locr_image_to_json(HELLO_PNG.as_ptr(), HELLO_PNG.len(), ptr::null(), &mut out) };
+    let status =
+        unsafe { locr_image_to_json(HELLO_PNG.as_ptr(), HELLO_PNG.len(), ptr::null(), &mut out) };
     assert_eq!(status, LocrStatus::Ok);
     let json: serde_json::Value = serde_json::from_str(&take(out)).unwrap();
     assert_eq!(json["version"], 1);
-    assert_eq!((json["width"].as_u64(), json["height"].as_u64()), (Some(400), Some(120)));
+    assert_eq!(
+        (json["width"].as_u64(), json["height"].as_u64()),
+        (Some(400), Some(120))
+    );
     assert!(json["lines"].is_array());
     assert_eq!(json["transform"], "none");
 }
@@ -69,12 +79,17 @@ fn json_options_are_applied() {
     init();
     let mut out = ptr::null_mut();
     let opts = c"{\"auto_enhance\": true, \"min_score\": 1.5, \"max_attempts\": 2, \"allowed_chars\": \"0123456789\"}";
-    let status = unsafe { locr_image_to_json(HELLO_PNG.as_ptr(), HELLO_PNG.len(), opts.as_ptr(), &mut out) };
+    let status =
+        unsafe { locr_image_to_json(HELLO_PNG.as_ptr(), HELLO_PNG.len(), opts.as_ptr(), &mut out) };
     assert_eq!(status, LocrStatus::Ok);
     let json: serde_json::Value = serde_json::from_str(&take(out)).unwrap();
     assert_eq!(json["attempts"], 2);
     let text = json["text"].as_str().unwrap();
-    assert!(text.chars().all(|c| c.is_ascii_digit() || c.is_whitespace()), "{text:?}");
+    assert!(
+        text.chars()
+            .all(|c| c.is_ascii_digit() || c.is_whitespace()),
+        "{text:?}"
+    );
 }
 
 #[test]
@@ -83,10 +98,14 @@ fn pixels_to_json() {
     // A blank white RGBA frame: the pixel path runs, nothing is read.
     let rgba = vec![255u8; 64 * 32 * 4];
     let mut out = ptr::null_mut();
-    let status = unsafe { locr_pixels_to_json(rgba.as_ptr(), rgba.len(), 64, 32, ptr::null(), &mut out) };
+    let status =
+        unsafe { locr_pixels_to_json(rgba.as_ptr(), rgba.len(), 64, 32, ptr::null(), &mut out) };
     assert_eq!(status, LocrStatus::Ok);
     let json: serde_json::Value = serde_json::from_str(&take(out)).unwrap();
-    assert_eq!((json["width"].as_u64(), json["height"].as_u64()), (Some(64), Some(32)));
+    assert_eq!(
+        (json["width"].as_u64(), json["height"].as_u64()),
+        (Some(64), Some(32))
+    );
     assert_eq!(json["text"], "");
 }
 
@@ -117,7 +136,17 @@ fn image_to_text_ex_reports_everything() {
     // Optional outputs may be null.
     let mut text = ptr::null_mut();
     let status = unsafe {
-        locr_image_to_text_ex(HELLO_PNG.as_ptr(), HELLO_PNG.len(), 0, 0.0, 0, &mut text, ptr::null_mut(), ptr::null_mut(), ptr::null_mut())
+        locr_image_to_text_ex(
+            HELLO_PNG.as_ptr(),
+            HELLO_PNG.len(),
+            0,
+            0.0,
+            0,
+            &mut text,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
     };
     assert_eq!(status, LocrStatus::Ok);
     take(text);

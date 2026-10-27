@@ -69,7 +69,12 @@ fn parse_args() -> Result<Option<Args>, lexopt::Error> {
         return Err("no images given (try --help)".into());
     }
     options.enhance = auto.then_some(enhance);
-    Ok(Some(Args { images, json, models, options }))
+    Ok(Some(Args {
+        images,
+        json,
+        models,
+        options,
+    }))
 }
 
 fn read_image(source: &str) -> io::Result<Vec<u8>> {
@@ -118,7 +123,10 @@ fn main() -> ExitCode {
     for (i, source) in args.images.iter().enumerate() {
         let result = read_image(source)
             .map_err(|e| e.to_string())
-            .and_then(|bytes| locr.image_to_data(&bytes, &args.options).map_err(|e| e.to_string()));
+            .and_then(|bytes| {
+                locr.image_to_data(&bytes, &args.options)
+                    .map_err(|e| e.to_string())
+            });
         let result = match result {
             Ok(result) => result,
             Err(err) => {

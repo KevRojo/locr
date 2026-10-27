@@ -35,6 +35,9 @@ __pycache__/
 /eng.traineddata
 /models/
 
+# Real OCR models (downloaded for offline builds; CC-BY-SA, ~12 MB)
+crates/locr-core/assets/
+
 # OS
 .DS_Store
 Thumbs.db

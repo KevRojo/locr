@@ -45,11 +45,16 @@ jobs:
           cargo check -p locr-core --no-default-features
           cargo check -p locr-core --no-default-features --features tesseract-cli
           cargo check -p locr-core --no-default-features --features ocrs,json,serde
-      # Real models: smoke tests read hello.png for real.
-      - run: cargo test --workspace
+      # Real models (smoke tests read hello.png), built like the shipped
+      # artifacts: see [profile.ci]. Failures become annotations.
+      - name: Test with the real models
+        shell: bash
+        run: bash .github/scripts/cargo-test.sh --workspace --profile ci
       # No bundled models: runtime loading (LOCR_MODELS_DIR, --models) with
-      # the synthetic test models.
-      - run: cargo test -p locr-core -p locr-ffi -p locr-cli --no-default-features
+      # the synthetic test models, in a debug build.
+      - name: Test offline with the synthetic models
+        shell: bash
+        run: bash .github/scripts/cargo-test.sh -p locr-core -p locr-ffi -p locr-cli --no-default-features
 
   ffi:
     name: C ABI (${{ matrix.os }})
@@ -71,7 +76,10 @@ jobs:
           cc -std=c99 -Wall -Wextra -Werror -pedantic -I crates/locr-ffi/include \
             crates/locr-ffi/examples/c/locr_cli.c -L target/release -llocr \
             -Wl,-rpath,"$PWD/target/release" -o locr_cli
-          ./locr_cli crates/locr-core/tests/fixtures/hello.png
+          set -o pipefail
+          ./locr_cli crates/locr-core/tests/fixtures/hello.png | tee ocr-output.txt
+          # What the real models read, visible on the run even when it passes.
+          echo "::notice title=OCR of hello.png::$(sed -n 's/^text: //p' ocr-output.txt | head -c 300 | sed 's/%/%25/g')"
       - uses: actions/upload-artifact@v4
         with:
           name: locr-ffi-${{ matrix.os }}

@@ -15,3 +15,18 @@ authors = ["KevRojo <kevrojo@example.com>"]
 lto = true
 codegen-units = 1
 strip = true
+
+# CI tests with the real models: optimized like the shipped artifacts (ocrs and
+# rten are very slow unoptimized). locr's own crates keep debug assertions and
+# overflow checks; dependencies build exactly as in release.
+[profile.ci]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false
+debug-assertions = true
+overflow-checks = true
+
+[profile.ci.package."*"]
+debug-assertions = false
+overflow-checks = false

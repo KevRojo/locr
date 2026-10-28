@@ -23,7 +23,8 @@ serde_json = { version = "1.0", optional = true }
 # OCR backends. Enable exactly one (or more) depending on the target.
 # `export-wasm` is left off so ocrs does not leak its own JS API into locr-wasm.
 ocrs = { version = "0.13.1", default-features = false, features = ["rten"], optional = true }
-rten = { version = "0.26", default-features = false, features = ["rten_format"], optional = true }
+# The published models are ONNX; `.rten` files (and the test fixtures) load too.
+rten = { version = "0.26", default-features = false, features = ["onnx_format", "rten_format"], optional = true }
 rten-imageproc = { version = "0.26", optional = true }
 rten-tensor = { version = "0.26", optional = true }
 rayon = { version = "1.10", optional = true }

@@ -23,7 +23,8 @@ Options:
       --max-attempts <N>  OCR passes for --auto, including the first [default: 7]
       --allowed-chars <S> Only emit these characters, e.g. 0123456789
       --beam <N>          CTC beam search width [default: greedy]
-      --models <DIR>      Load text-detection.rten and text-recognition.rten from DIR
+      --models <DIR>      Load text-detection.onnx and text-recognition.onnx
+                          (or .rten) from DIR
   -h, --help              Print help
   -V, --version           Print version
 ";

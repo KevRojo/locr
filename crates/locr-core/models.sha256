@@ -1,0 +1,6 @@
+# SHA-256 of the ocrs models embedded by the `bundle-models` feature.
+# build.rs and CI (.github/actions/ocr-models) refuse any other bytes.
+# Source: https://ocrs-models.s3-accelerate.amazonaws.com/<file>
+# Unpinned entries ("unknown") fail the build and print the downloaded digest.
+unknown  text-detection.onnx
+unknown  text-recognition.onnx

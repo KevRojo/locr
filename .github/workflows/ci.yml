@@ -13,8 +13,18 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Fails fast, with the downloaded digest in an annotation, when the models
+  # do not match crates/locr-core/models.sha256; the other jobs then skip.
+  models:
+    name: OCR models
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ocr-models
+
   rust:
     name: Rust (${{ matrix.os }})
+    needs: models
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -43,6 +53,7 @@ jobs:
 
   ffi:
     name: C ABI (${{ matrix.os }})
+    needs: models
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -74,6 +85,7 @@ jobs:
 
   npm:
     name: npm (WASM)
+    needs: models
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,9 +97,11 @@ jobs:
       - id: bindgen
         name: wasm-bindgen version pinned by locr-wasm
         run: echo "version=$(sed -n 's/^wasm-bindgen = "=\(.*\)"$/\1/p' crates/locr-wasm/Cargo.toml)" >> "$GITHUB_OUTPUT"
+      # cargo-binstall fetches the prebuilt wasm-bindgen release, or builds it.
       - uses: taiki-e/install-action@v2
         with:
-          tool: wasm-bindgen@${{ steps.bindgen.outputs.version }}
+          tool: cargo-binstall
+      - run: cargo binstall --no-confirm --locked "wasm-bindgen-cli@${{ steps.bindgen.outputs.version }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -98,6 +112,7 @@ jobs:
 
   python:
     name: Python (${{ matrix.os }})
+    needs: models
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

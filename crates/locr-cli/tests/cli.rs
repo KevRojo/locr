@@ -149,5 +149,5 @@ fn usage_errors() {
 fn missing_models_are_reported() {
     let out = locr(&["--models", "/nonexistent-models", HELLO_PNG]);
     assert_eq!(out.status.code(), Some(1));
-    assert!(stderr(&out).contains("text-detection.rten"));
+    assert!(stderr(&out).contains("text-detection.onnx"));
 }

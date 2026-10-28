@@ -109,8 +109,8 @@ cargo build -p locr-ffi --release
 
 The models are embedded by default. To ship them separately (smaller library,
 or distro packaging), build with `--no-default-features` and point
-`LOCR_MODELS_DIR` at a directory holding `text-detection.rten` and
-`text-recognition.rten`.
+`LOCR_MODELS_DIR` at a directory holding `text-detection.onnx` and
+`text-recognition.onnx` (`.rten` files work too).
 
 Prebuilt binaries for Linux/macOS/Windows (x64 + ARM64) ship on every release
 and as CI artifacts.

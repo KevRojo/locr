@@ -1,8 +1,8 @@
 //! Pure-Rust OCR engine powered by [ocrs](https://github.com/robertknight/ocrs) and RTen.
 //!
-//! ocrs handles detection, layout analysis and line-image preparation. The
-//! recognition model is run here so its character probabilities survive as
-//! confidence scores (ocrs discards them). Batching, CTC decoding and the
+//! ocrs handles detection and layout analysis. Recognition runs here so the
+//! model's character probabilities survive as confidence scores (ocrs
+//! discards them). Line-image preparation, batching, CTC decoding and the
 //! mapping back to image coordinates mirror ocrs'
 //! `TextRecognizer::recognize_text_lines`; the differential tests below hold
 //! this module to ocrs' output.
@@ -13,7 +13,7 @@ use image::DynamicImage;
 use ocrs::{ImageSource, OcrEngine as OcrsInner, OcrEngineParams, OcrInput};
 use rayon::prelude::*;
 use rten::ctc::{CtcDecoder, CtcHypothesis};
-use rten::{Dimension, Model};
+use rten::{Dimension, FloatOperators, Model};
 use rten_imageproc::{
     bounding_rect, BoundingRect, Line as Segment, LineF, Point, PointF, Polygon, Rect, RotatedRect,
 };
@@ -33,14 +33,18 @@ const BLACK_VALUE: f32 = -0.5;
 /// Lines per recognition batch (matches ocrs).
 const MAX_LINES_PER_BATCH: usize = 20;
 
+/// ITU BT.601 luma weights pre-divided by 255, as ocrs normalizes RGB pixels
+/// (matching torchvision's greyscale conversion used in training).
+const RGB_WEIGHTS: [f32; 3] = [0.299 / 255.0, 0.587 / 255.0, 0.114 / 255.0];
+
 /// Pure-Rust OCR engine powered by [ocrs](https://github.com/robertknight/ocrs) and RTen.
 ///
 /// Models are embedded at build time via `include_bytes!` when the `bundle-models` feature
 /// is enabled. No runtime downloads, no cloud calls, no native binaries to install.
 pub struct OcrsEngine {
-    /// Detection, layout analysis and line preparation.
+    /// Detection and layout analysis (built without a recognition model).
     engine: OcrsInner,
-    /// Second handle on the recognition model, run directly to keep probabilities.
+    /// Recognition model, run directly to keep character probabilities.
     recognizer: Model,
     /// Height of line images expected by `recognizer`.
     rec_height: usize,
@@ -59,26 +63,14 @@ impl OcrsEngine {
     pub fn new() -> Result<Self> {
         #[cfg(feature = "bundle-models")]
         {
-            // 64-byte aligned so RTen can use the weights in place instead of
-            // copying every tensor out of an unaligned `include_bytes!` slice.
-            #[repr(C, align(64))]
-            struct Aligned<T: ?Sized>(T);
-            static DETECTION: &Aligned<[u8]> = &Aligned(*include_bytes!(concat!(
-                env!("OUT_DIR"),
-                "/text-detection.rten"
-            )));
-            static RECOGNITION: &Aligned<[u8]> = &Aligned(*include_bytes!(concat!(
-                env!("OUT_DIR"),
-                "/text-recognition.rten"
-            )));
+            static DETECTION: &[u8] =
+                include_bytes!(concat!(env!("OUT_DIR"), "/text-detection.onnx"));
+            static RECOGNITION: &[u8] =
+                include_bytes!(concat!(env!("OUT_DIR"), "/text-recognition.onnx"));
 
-            let load = |bytes: &'static [u8], which| {
-                Model::load_static_slice(bytes).map_err(load_err(which))
-            };
             Self::from_models(
-                load(&DETECTION.0, "detection")?,
-                load(&RECOGNITION.0, "recognition")?,
-                load(&RECOGNITION.0, "recognition")?,
+                Model::load_static_slice(DETECTION).map_err(load_err("detection"))?,
+                Model::load_static_slice(RECOGNITION).map_err(load_err("recognition"))?,
             )
         }
 
@@ -96,15 +88,16 @@ impl OcrsEngine {
         Self::new()
     }
 
-    /// Engine from `.rten` model bytes, e.g. fetched once and cached by the host app.
+    /// Engine from `.onnx` or `.rten` model bytes (the format is detected),
+    /// e.g. fetched once and cached by the host app.
     pub fn from_model_bytes(detection: Vec<u8>, recognition: Vec<u8>) -> Result<Self> {
-        let detection = Model::load(detection).map_err(load_err("detection"))?;
-        let layout = Model::load(recognition.clone()).map_err(load_err("recognition"))?;
-        let recognition = Model::load(recognition).map_err(load_err("recognition"))?;
-        Self::from_models(detection, layout, recognition)
+        Self::from_models(
+            Model::load(detection).map_err(load_err("detection"))?,
+            Model::load(recognition).map_err(load_err("recognition"))?,
+        )
     }
 
-    /// Engine from `.rten` model files.
+    /// Engine from `.onnx` or `.rten` model files.
     pub fn from_model_files(
         detection: impl AsRef<Path>,
         recognition: impl AsRef<Path>,
@@ -123,13 +116,20 @@ impl OcrsEngine {
         )
     }
 
-    /// Engine from a directory containing `text-detection.rten` and `text-recognition.rten`.
+    /// Engine from a directory containing `text-detection` and
+    /// `text-recognition` models, as `.onnx` (preferred) or `.rten` files.
     pub fn from_models_dir(dir: impl AsRef<Path>) -> Result<Self> {
         let dir = dir.as_ref();
-        Self::from_model_files(
-            dir.join("text-detection.rten"),
-            dir.join("text-recognition.rten"),
-        )
+        let find = |name: &str| {
+            let onnx = dir.join(format!("{name}.onnx"));
+            let rten = dir.join(format!("{name}.rten"));
+            if !onnx.exists() && rten.exists() {
+                rten
+            } else {
+                onnx
+            }
+        };
+        Self::from_model_files(find("text-detection"), find("text-recognition"))
     }
 
     /// Decode with a custom alphabet, for recognition models trained on other
@@ -139,10 +139,9 @@ impl OcrsEngine {
         self
     }
 
-    fn from_models(detection: Model, layout: Model, recognition: Model) -> Result<Self> {
+    fn from_models(detection: Model, recognition: Model) -> Result<Self> {
         let engine = OcrsInner::new(OcrEngineParams {
             detection_model: Some(detection),
-            recognition_model: Some(layout),
             ..Default::default()
         })
         .map_err(|e| LocrError::EngineError(format!("failed to build ocrs engine: {}", e)))?;
@@ -155,17 +154,8 @@ impl OcrsEngine {
         })
     }
 
-    fn prepare(&self, image: &DynamicImage) -> Result<OcrInput> {
-        let converted;
-        let (bytes, dimensions) = match image {
-            DynamicImage::ImageLuma8(img) => (img.as_raw().as_slice(), img.dimensions()),
-            DynamicImage::ImageRgb8(img) => (img.as_raw().as_slice(), img.dimensions()),
-            other => {
-                converted = other.to_rgb8();
-                (converted.as_raw().as_slice(), converted.dimensions())
-            }
-        };
-        let source = ImageSource::from_bytes(bytes, dimensions)
+    fn prepare(&self, page: &Page) -> Result<OcrInput> {
+        let source = ImageSource::from_bytes(page.pixels, (page.width as u32, page.height as u32))
             .map_err(|e| LocrError::EngineError(format!("image preprocessing failed: {}", e)))?;
         self.engine
             .prepare_input(source)
@@ -176,7 +166,7 @@ impl OcrsEngine {
     /// probabilities. Entries are `None` for lines without recognized text.
     fn recognize_text(
         &self,
-        input: &OcrInput,
+        page: &Page,
         lines: &[Vec<RotatedRect>],
         options: &OcrOptions,
     ) -> Result<Vec<Option<Vec<RecChar>>>> {
@@ -205,7 +195,7 @@ impl OcrsEngine {
             batches
                 .into_par_iter()
                 .map(|(width, batch)| {
-                    self.recognize_batch(input, lines, width, &batch, &excluded, options.beam_width)
+                    self.recognize_batch(page, lines, width, &batch, &excluded, options.beam_width)
                 })
                 .collect::<Result<Vec<_>>>()
         })?;
@@ -227,7 +217,7 @@ impl OcrsEngine {
 
     fn recognize_batch(
         &self,
-        input: &OcrInput,
+        page: &Page,
         lines: &[Vec<RotatedRect>],
         group_width: usize,
         batch: &[usize],
@@ -238,19 +228,16 @@ impl OcrsEngine {
             .iter()
             .map(|&index| {
                 let words = &lines[index];
-                let image = self
-                    .engine
-                    .prepare_recognition_input(input, words)
-                    .map_err(engine_err("line preparation"))?;
+                let region = Polygon::new(line_polygon(words));
                 Ok(PendingLine {
                     index,
-                    image,
-                    region: Polygon::new(line_polygon(words)),
+                    image: self.line_image(page, words, &region)?,
+                    region,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
 
-        // ocrs sizes line images with the same formula as `group_width`; never
+        // Line images are sized with the same formula as `group_width`; never
         // let a disagreement overflow the batch.
         let group_width = lines
             .iter()
@@ -315,6 +302,46 @@ impl OcrsEngine {
             .collect())
     }
 
+    /// Greyscale image of one line for the recognizer: the line's polygon cut
+    /// out of the page and resized to the model's input height. Port of ocrs'
+    /// `TextRecognizer::prepare_input`.
+    fn line_image(
+        &self,
+        page: &Page,
+        words: &[RotatedRect],
+        region: &Polygon,
+    ) -> Result<NdTensor<f32, 2>> {
+        let rect = bounding_rect(words.iter())
+            .map(|r| r.integral_bounding_rect())
+            .ok_or_else(|| LocrError::EngineError("text line has no words".into()))?;
+        let resized_width = resized_line_width(rect.width(), rect.height(), self.rec_height as i32);
+
+        // Pixel coordinates that are valid indices into the page.
+        let page_index_rect =
+            Rect::from_hw(page.height as i32, page.width as i32).adjust_tlbr(0, 0, -1, -1);
+        let line_rect = region.bounding_rect();
+        let mut line = NdTensor::full(
+            [line_rect.height() as usize, line_rect.width() as usize],
+            BLACK_VALUE,
+        );
+        for in_p in region.fill_iter() {
+            let out_p = Point::from_yx(in_p.y - line_rect.top(), in_p.x - line_rect.left());
+            if !page_index_rect.contains_point(in_p) || !page_index_rect.contains_point(out_p) {
+                continue;
+            }
+            line[[out_p.y as usize, out_p.x as usize]] =
+                page.grey(in_p.x as usize, in_p.y as usize);
+        }
+
+        let [height, width] = line.shape();
+        let resized = line
+            .reshaped([1, 1, height, width])
+            .resize_image([self.rec_height, resized_width as usize])
+            .map_err(engine_err("line resize"))?;
+        let shape = [resized.size(2), resized.size(3)];
+        Ok(resized.into_shape(shape))
+    }
+
     /// Map decoded labels back to characters with image coordinates and probabilities.
     fn line_chars(
         &self,
@@ -372,13 +399,22 @@ impl OcrEngine for OcrsEngine {
     fn recognize_lines(&self, image: &DynamicImage, options: &OcrOptions) -> Result<Vec<Line>> {
         // Also checked by `Locr`, but the engine can be driven directly.
         options.validate()?;
-        let input = self.prepare(image)?;
+        let converted;
+        let page = match image {
+            DynamicImage::ImageLuma8(img) => Page::new(img.as_raw(), img.dimensions(), 1),
+            DynamicImage::ImageRgb8(img) => Page::new(img.as_raw(), img.dimensions(), 3),
+            other => {
+                converted = other.to_rgb8();
+                Page::new(converted.as_raw(), converted.dimensions(), 3)
+            }
+        };
+        let input = self.prepare(&page)?;
         let words = self
             .engine
             .detect_words(&input)
             .map_err(engine_err("text detection"))?;
         let lines = self.engine.find_text_lines(&input, &words);
-        let recognized = self.recognize_text(&input, &lines, options)?;
+        let recognized = self.recognize_text(&page, &lines, options)?;
         Ok(recognized
             .into_iter()
             .flatten()
@@ -387,11 +423,45 @@ impl OcrEngine for OcrsEngine {
     }
 }
 
+/// 8-bit pixels of the page being read: greyscale or RGB, row-major.
+struct Page<'a> {
+    pixels: &'a [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+}
+
+impl<'a> Page<'a> {
+    fn new(pixels: &'a [u8], (width, height): (u32, u32), channels: usize) -> Self {
+        Page {
+            pixels,
+            width: width as usize,
+            height: height as usize,
+            channels,
+        }
+    }
+
+    /// Pixel in ocrs' normalized greyscale (`[-0.5, 0.5]`), with the same
+    /// arithmetic as `ocrs::prepare_image` so line images match ocrs exactly.
+    fn grey(&self, x: usize, y: usize) -> f32 {
+        let i = (y * self.width + x) * self.channels;
+        if self.channels == 1 {
+            BLACK_VALUE + self.pixels[i] as f32 * (1. / 255.)
+        } else {
+            let mut pixel = BLACK_VALUE;
+            for (c, weight) in RGB_WEIGHTS.iter().enumerate() {
+                pixel += self.pixels[i + c] as f32 * weight;
+            }
+            pixel
+        }
+    }
+}
+
 /// A text line ready for the recognition model.
 struct PendingLine {
     /// Position of the line in reading order.
     index: usize,
-    /// Greyscale `[height, width]` line image from ocrs.
+    /// Greyscale `[height, width]` line image.
     image: NdTensor<f32, 2>,
     /// Region of the page covered by the line.
     region: Polygon,
@@ -664,13 +734,15 @@ mod tests {
         img
     }
 
+    fn as_page(img: &image::RgbImage) -> Page<'_> {
+        Page::new(img.as_raw(), img.dimensions(), 3)
+    }
+
     fn input_and_lines(
         engine: &OcrsEngine,
         img: &image::RgbImage,
     ) -> (OcrInput, Vec<Vec<RotatedRect>>) {
-        let input = engine
-            .prepare(&DynamicImage::ImageRgb8(img.clone()))
-            .unwrap();
+        let input = engine.prepare(&as_page(img)).unwrap();
         let words = engine.engine.detect_words(&input).unwrap();
         let lines = engine.engine.find_text_lines(&input, &words);
         (input, lines)
@@ -683,9 +755,13 @@ mod tests {
         options: &OcrOptions,
         img: &image::RgbImage,
     ) -> usize {
+        // ocrs prepares its own line images from `input`; locr cuts them out
+        // of the page pixels. Both must agree to the character and the box.
         let (input, lines) = input_and_lines(engine, img);
         let expected = reference.recognize_text(&input, &lines).unwrap();
-        let actual = engine.recognize_text(&input, &lines, options).unwrap();
+        let actual = engine
+            .recognize_text(&as_page(img), &lines, options)
+            .unwrap();
         assert_eq!(expected.len(), actual.len());
 
         let mut chars = 0;
@@ -746,9 +822,9 @@ mod tests {
         let img = page(5, 8, 50, 4);
         assert!(assert_matches_ocrs(&engine, &reference, &options, &img) > 0);
 
-        let (input, lines) = input_and_lines(&engine, &img);
+        let (_, lines) = input_and_lines(&engine, &img);
         for chars in engine
-            .recognize_text(&input, &lines, &options)
+            .recognize_text(&as_page(&img), &lines, &options)
             .unwrap()
             .into_iter()
             .flatten()
@@ -776,9 +852,10 @@ mod tests {
     #[test]
     fn probabilities_are_valid() {
         let engine = synthetic_engine();
-        let (input, lines) = input_and_lines(&engine, &page(7, 6, 60, 4));
+        let img = page(7, 6, 60, 4);
+        let (_, lines) = input_and_lines(&engine, &img);
         let chars: Vec<RecChar> = engine
-            .recognize_text(&input, &lines, &OcrOptions::default())
+            .recognize_text(&as_page(&img), &lines, &OcrOptions::default())
             .unwrap()
             .into_iter()
             .flatten()
@@ -884,7 +961,7 @@ mod tests {
     #[test]
     fn missing_model_files_are_reported() {
         let err = OcrsEngine::from_models_dir("/nonexistent/locr-models").unwrap_err();
-        assert!(matches!(err, LocrError::EngineError(msg) if msg.contains("text-detection.rten")));
+        assert!(matches!(err, LocrError::EngineError(msg) if msg.contains("text-detection.onnx")));
         let err = OcrsEngine::from_model_bytes(b"junk".to_vec(), b"junk".to_vec()).unwrap_err();
         assert!(matches!(err, LocrError::EngineError(msg) if msg.contains("detection model")));
     }

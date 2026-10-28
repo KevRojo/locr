@@ -1,8 +1,8 @@
 name: OCR models
 description: >
   Restore or download the ocrs models into crates/locr-core/assets, where
-  build.rs picks them up (and verifies their pinned SHA-256) instead of
-  downloading them again for every build.
+  build.rs picks them up instead of downloading them for every build, and
+  check them against crates/locr-core/models.sha256 (build.rs checks again).
 runs:
   using: composite
   steps:
@@ -10,13 +10,30 @@ runs:
       id: cache
       with:
         path: crates/locr-core/assets
-        key: ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/build.rs') }}
+        key: ocrs-models-${{ runner.os }}-${{ hashFiles('crates/locr-core/models.sha256') }}
     - if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         mkdir -p crates/locr-core/assets
-        for model in text-detection text-recognition; do
+        for model in text-detection.onnx text-recognition.onnx; do
           curl --fail --silent --show-error --location --retry 3 \
-            --output "crates/locr-core/assets/$model.rten" \
-            "https://ocrs-models.s3-accelerate.amazonaws.com/$model.rten"
+            --output "crates/locr-core/assets/$model" \
+            "https://ocrs-models.s3-accelerate.amazonaws.com/$model"
         done
+    - name: Check model digests
+      shell: bash
+      run: |
+        sha256() {
+          if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1
+        }
+        status=0
+        for model in text-detection.onnx text-recognition.onnx; do
+          got=$(sha256 "crates/locr-core/assets/$model")
+          want=$(awk -v file="$model" '$2 == file { print $1 }' crates/locr-core/models.sha256)
+          if [ "$got" != "$want" ]; then
+            # The digest goes into an annotation so it can be reviewed and pinned.
+            echo "::error title=$model digest::pinned ${want:-nothing} in crates/locr-core/models.sha256, downloaded $got"
+            status=1
+          fi
+        done
+        exit $status

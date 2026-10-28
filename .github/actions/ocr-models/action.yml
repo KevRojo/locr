@@ -29,7 +29,8 @@ runs:
         status=0
         for model in text-detection.onnx text-recognition.onnx; do
           got=$(sha256 "crates/locr-core/assets/$model")
-          want=$(awk -v file="$model" '$2 == file { print $1 }' crates/locr-core/models.sha256)
+          # Strip CR: Windows runners check text files out with CRLF.
+          want=$(awk -v file="$model" '{ sub(/\r$/, "") } $2 == file { print $1 }' crates/locr-core/models.sha256)
           if [ "$got" != "$want" ]; then
             # The digest goes into an annotation so it can be reviewed and pinned.
             echo "::error title=$model digest::pinned ${want:-nothing} in crates/locr-core/models.sha256, downloaded $got"
